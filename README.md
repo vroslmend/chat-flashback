@@ -78,6 +78,12 @@ Sample output from the synthetic thread is in `examples/`:
 - PNG charts: messages per year, activity by hour/weekday, top members, top words,
   yearly recap, reaction dynamics, response speed, swear stats, tracked terms
 
+![Messages per year](examples/messages_by_year.png)
+
+![Yearly recap: messages and top member](examples/yearly_recap.png)
+
+![Most-reacted messages](examples/most_reacted.png)
+
 ## License
 
 MIT
