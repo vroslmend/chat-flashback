@@ -9,11 +9,12 @@ import argparse
 import base64
 import html as html_lib
 import json
+import math
 import re
 import sys
 import textwrap
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -134,7 +135,33 @@ def load_thread(thread_dir):
     return title, participants, messages
 
 
-def normalize_messages(raw):
+def _parse_tz(tz):
+    tz = tz.strip()
+    m = re.match(r"^([+-])(\d{1,2}):?(\d{2})?$", tz)
+    if m:
+        sign = 1 if m.group(1) == "+" else -1
+        hours = int(m.group(2))
+        minutes = int(m.group(3) or 0)
+        if hours > 14 or minutes > 59:
+            raise ValueError(f"invalid timezone offset {tz!r}")
+        return timezone(sign * timedelta(hours=hours, minutes=minutes))
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(tz)
+    except Exception:
+        raise ValueError(
+            f"invalid timezone {tz!r}; use +HH:MM / -HH:MM or an IANA name like "
+            "America/New_York")
+
+
+def _local_dt(ts_ms, tzinfo):
+    if tzinfo is None:
+        return datetime.fromtimestamp(ts_ms / 1000)
+    return datetime.fromtimestamp(ts_ms / 1000, tzinfo).replace(tzinfo=None)
+
+
+def normalize_messages(raw, tz=None):
+    tzinfo = _parse_tz(tz) if tz else None
     msgs = []
     for m in raw:
         sender = m.get("sender_name")
@@ -160,7 +187,7 @@ def normalize_messages(raw):
             "id": m.get("id"),
             "sender": sender,
             "ts_ms": ts_ms,
-            "dt": datetime.fromtimestamp(ts_ms / 1000),
+            "dt": _local_dt(ts_ms, tzinfo),
             "content": content,
             "mtype": m.get("type", "Generic"),
             "reactions": reactions,
@@ -757,6 +784,156 @@ def unsent_stats(msgs):
     return Counter(m["sender"] for m in msgs if m["is_unsent"])
 
 
+def emoji_stats(msgs):
+    per_member = defaultdict(Counter)
+    per_year = defaultdict(Counter)
+    member_total = Counter(m["sender"] for m in msgs)
+    for m in msgs:
+        emojis = split_emojis(m["content"])
+        if not emojis:
+            continue
+        per_member[m["sender"]].update(emojis)
+        per_year[m["dt"].year].update(emojis)
+    return {
+        "total_emojis": sum(sum(c.values()) for c in per_member.values()),
+        "per_member": dict(per_member),
+        "per_year": {y: c for y, c in sorted(per_year.items())},
+        "emojis_per_100": {m: round(100 * sum(c.values()) / member_total[m], 1)
+                           for m, c in per_member.items() if member_total[m]},
+    }
+
+
+def question_stats(msgs):
+    def is_question(m):
+        c = (m["content"] or "").strip()
+        return bool(c) and c.endswith("?")
+
+    n = len(msgs)
+    next_other = [None] * n
+    i = 0
+    while i < n:
+        sender = msgs[i]["sender"]
+        j = i + 1
+        while j < n and msgs[j]["sender"] == sender:
+            j += 1
+        if j < n:
+            for k in range(i, j):
+                if (msgs[j]["ts_ms"] - msgs[k]["ts_ms"]) / 1000 <= REPLY_WINDOW_SECONDS:
+                    next_other[k] = j
+                else:
+                    break
+        i = j
+
+    asked = Counter()
+    answered_q = Counter()
+    responses = Counter()
+    answer_time = defaultdict(list)
+    total_asked = 0
+    total_answered = 0
+    for idx, m in enumerate(msgs):
+        if not is_question(m):
+            continue
+        total_asked += 1
+        asked[m["sender"]] += 1
+        j = next_other[idx]
+        if j is not None:
+            total_answered += 1
+            answered_q[m["sender"]] += 1
+            responder = msgs[j]["sender"]
+            responses[responder] += 1
+            answer_time[responder].append((msgs[j]["ts_ms"] - m["ts_ms"]) / 1000)
+
+    table = []
+    for member in set(asked) | set(responses):
+        a = asked[member]
+        gaps = answer_time[member]
+        gaps.sort()
+        gl = len(gaps)
+        if gl:
+            med = gaps[gl // 2] if gl % 2 else (gaps[gl // 2 - 1] + gaps[gl // 2]) / 2
+        else:
+            med = None
+        table.append({
+            "member": member,
+            "asked": a,
+            "answered": answered_q[member],
+            "answer_pct": round(100 * answered_q[member] / a, 1) if a else None,
+            "responses_given": responses[member],
+            "median_m": round(med / 60, 1) if med is not None else None,
+        })
+    table.sort(key=lambda r: -r["asked"])
+    return {"table": table, "total_questions": total_asked,
+            "total_answered": total_answered,
+            "unanswered_count": total_asked - total_answered}
+
+
+def topic_words(msgs, top=6):
+    by_year = defaultdict(Counter)
+    year_totals = Counter()
+    year_docs = defaultdict(int)
+    for m in msgs:
+        year = m["dt"].year
+        seen = set()
+        for w in tokenize(m["content"]):
+            if w in STOPWORDS or len(w) <= 2:
+                continue
+            by_year[year][w] += 1
+            year_totals[year] += 1
+            seen.add(w)
+        for w in seen:
+            year_docs[w] += 1
+    n_years = max(1, len(by_year))
+    result = {}
+    for year, counter in sorted(by_year.items()):
+        tf_total = max(1, year_totals[year])
+        scored = []
+        for w, c in counter.items():
+            tf = c / tf_total
+            idf = math.log((1 + n_years) / (1 + year_docs[w])) + 1
+            scored.append((tf * idf, w, c))
+        scored.sort(reverse=True)
+        result[year] = [{"word": w, "score": round(s, 4), "count": c}
+                        for s, w, c in scored[:top]]
+    return {"by_year": result, "years": sorted(by_year)}
+
+
+def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12):
+    def ngrams(words, n):
+        return [" ".join(words[i:i + n]) for i in range(max(0, len(words) - n + 1))]
+
+    phrase = defaultdict(lambda: {"count": 0, "members": set(), "years": set(), "example": None})
+    for m in msgs:
+        words = [w for w in tokenize(m["content"]) if w not in STOPWORDS and len(w) > 2]
+        if len(words) < 2:
+            continue
+        found = set()
+        for n in (2, 3, 4):
+            for g in ngrams(words, n):
+                if g in found:
+                    continue
+                found.add(g)
+                info = phrase[g]
+                info["count"] += 1
+                info["members"].add(m["sender"])
+                info["years"].add(m["dt"].year)
+                if info["example"] is None and len(g.split()) >= 2:
+                    info["example"] = m["content"]
+    jokes = []
+    for phrase_text, info in phrase.items():
+        if (info["count"] >= min_count and len(info["members"]) >= min_members
+                and len(info["years"]) >= min_years):
+            ex = info["example"]
+            if ex and len(ex) > 70:
+                ex = ex[:70] + "..."
+            jokes.append({
+                "phrase": phrase_text, "count": info["count"],
+                "members": sorted(info["members"]), "years": sorted(info["years"]),
+                "example": ex,
+            })
+    jokes.sort(key=lambda j: (-j["count"], -len(j["years"])))
+    return {"jokes": jokes[:top], "total_candidates": len(phrase)}
+
+
 # --------------------------------------------------------------------------- #
 # Charts                                                                      #
 # --------------------------------------------------------------------------- #
@@ -1192,6 +1369,78 @@ def write_charts(msgs, stats, analyses, out_dir, track):
                  "Unsent messages per member")
             save(fig, "unsent.png")
 
+    # emoji timeline (top 5 emojis across years)
+    emo = analyses.get("emojis")
+    if emo and emo["per_year"]:
+        years = sorted(emo["per_year"])
+        top_emoji_names = [e for e, _ in Counter(
+            {e: c for y in years for e, c in emo["per_year"][y].items()}
+        ).most_common(5)]
+        if top_emoji_names:
+            with plt.rc_context(theme):
+                fig, ax = plt.subplots(figsize=(9, 4))
+                for i, e in enumerate(top_emoji_names):
+                    series = [emo["per_year"][y].get(e, 0) for y in years]
+                    ax.plot(years, series, marker="o", label=emoji_lib.demojize(e).strip(":"),
+                            color=PALETTE[i % len(PALETTE)])
+                ax.set_xticks(years)
+                ax.set_title("Favorite emojis over the years", fontweight="bold")
+                ax.legend(fontsize=8)
+                save(fig, "emoji_timeline.png")
+
+    # question dynamics
+    qst = analyses.get("questions")
+    if qst and qst["table"]:
+        top_q = qst["table"][:10]
+        with plt.rc_context(theme):
+            fig, ax = plt.subplots(figsize=(8, 4))
+            _bar(fig, ax, [r["member"] for r in top_q], [r["asked"] for r in top_q],
+                 "Questions asked per member")
+            save(fig, "questions_asked.png")
+        responders = [r for r in qst["table"] if r["median_m"] is not None]
+        if responders:
+            responders = sorted(responders, key=lambda r: r["median_m"])[:10]
+            with plt.rc_context(theme):
+                fig, ax = plt.subplots(figsize=(8, 4))
+                _bar(fig, ax, [r["member"] for r in responders],
+                     [max(0.1, r["median_m"]) for r in responders],
+                     "Median time to answer a question (minutes)")
+                save(fig, "question_speed.png")
+
+    # topics per year (tf-idf)
+    topics = analyses.get("topics")
+    if topics and topics["by_year"]:
+        show_years = topics["years"][-12:]
+        n_rows = max(1, min(len(show_years), 6))
+        n_cols = -(-len(show_years) // n_rows)
+        with plt.rc_context(theme):
+            fig, axes = plt.subplots(n_rows, n_cols, figsize=(11, 2.4 * n_rows))
+            axes = [axes] if n_rows == n_cols == 1 else list(np.ravel(axes))
+            for i, year in enumerate(show_years):
+                ax = axes[i]
+                words = topics["by_year"][year]
+                labels = [w["word"] for w in words]
+                counts = [w["count"] for w in words]
+                colors = [PALETTE[j % len(PALETTE)] for j in range(len(labels))]
+                ax.barh(range(len(labels)), counts[::-1], color=colors[::-1])
+                ax.set_yticks(range(len(labels)))
+                ax.set_yticklabels(labels[::-1], fontsize=8)
+                ax.set_title(str(year), fontsize=10, fontweight="bold")
+            for j in range(len(show_years), len(axes)):
+                axes[j].axis("off")
+            fig.suptitle("What the chat was about each year", fontweight="bold")
+            save(fig, "topics_by_year.png")
+
+    # running jokes
+    jokes = analyses.get("jokes")
+    if jokes and jokes["jokes"]:
+        with plt.rc_context(theme):
+            fig, ax = plt.subplots(figsize=(8, 4))
+            top_jokes = jokes["jokes"][:8]
+            _bar(fig, ax, [j["phrase"] for j in top_jokes],
+                 [j["count"] for j in top_jokes], "Running jokes")
+            save(fig, "inside_jokes.png")
+
 
 def _shorten(text, n=40):
     if not text:
@@ -1498,6 +1747,67 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
             lines.append(f"| {member} | {count} |")
         lines.append("")
 
+    emo = analyses.get("emojis")
+    if emo and emo["per_member"]:
+        lines.append("## Emoji report")
+        lines.append("")
+        lines.append(f"**{emo['total_emojis']:,}** emojis in total. Emojis per 100 messages:")
+        lines.append("")
+        lines.append("| Member | Emojis | Emojis/100 msgs | Top 3 emojis |")
+        lines.append("|---|---|---|---|")
+        for member, counter in sorted(emo["per_member"].items(),
+                                       key=lambda kv: -sum(kv[1].values())):
+            top3 = ", ".join(e for e, _ in counter.most_common(3))
+            per100 = emo["emojis_per_100"].get(member, 0)
+            lines.append(f"| {member} | {sum(counter.values()):,} | {per100} | {top3} |")
+        lines.append("")
+
+    qst = analyses.get("questions")
+    if qst and qst["table"]:
+        lines.append("## Question dynamics")
+        lines.append("")
+        lines.append(f"**{qst['total_questions']}** questions asked; "
+                     f"**{qst['total_answered']}** got a reply within an hour "
+                     f"({100 * qst['total_answered'] / max(1, qst['total_questions']):.0f}%).")
+        lines.append("")
+        lines.append("| Member | Asked | Answered | Answer % | Responses given | Median answer |")
+        lines.append("|---|---|---|---|---|---|")
+        for r in qst["table"]:
+            ans = "n/a" if r["answer_pct"] is None else f"{r['answer_pct']}%"
+            med = "n/a" if r["median_m"] is None else f"{r['median_m']} min"
+            lines.append(f"| {r['member']} | {r['asked']} | {r['answered']} | {ans} "
+                         f"| {r['responses_given']} | {med} |")
+        lines.append("")
+
+    topics = analyses.get("topics")
+    if topics and topics["by_year"]:
+        lines.append("## What the chat was about")
+        lines.append("")
+        lines.append("Top topic words per year (tf-idf):")
+        lines.append("")
+        for year, words in topics["by_year"].items():
+            bits = ", ".join(f"**{w['word']}** ({w['count']})" for w in words)
+            lines.append(f"- **{year}**: {bits}")
+        lines.append("")
+
+    jokes = analyses.get("jokes")
+    if jokes and jokes["jokes"]:
+        lines.append("## Running jokes")
+        lines.append("")
+        lines.append("Phrases said often enough, by enough people, over enough years "
+                     "to count as an inside joke:")
+        lines.append("")
+        lines.append("| Phrase | Times | Members | Years |")
+        lines.append("|---|---|---|---|")
+        for j in jokes["jokes"]:
+            lines.append(f"| *{j['phrase']}* | {j['count']} | "
+                         f"{', '.join(j['members'])} | {', '.join(str(y) for y in j['years'])} |")
+        example = jokes["jokes"][0].get("example")
+        if example:
+            lines.append("")
+            lines.append(f"Example: \"{example}\"")
+        lines.append("")
+
     lines.append("## Charts")
     lines.append("")
     charts = sorted(p.name for p in out_dir.glob("*.png"))
@@ -1561,6 +1871,26 @@ def insights(stats, analyses):
     if ex:
         out.append(f"The record day was {ex['record_day']} with "
                    f"{ex['record_day_count']} messages.")
+    emo = analyses.get("emojis")
+    if emo and emo["per_year"]:
+        top_emoji = Counter(
+            {e: c for y in emo["per_year"].values() for e, c in y.items()}
+        ).most_common(1)
+        if top_emoji:
+            out.append(f"The chat's favorite emoji is {top_emoji[0][0]} "
+                       f"({top_emoji[0][1]} uses).")
+    qst = analyses.get("questions")
+    if qst and qst["table"]:
+        by_rate = [r for r in qst["table"] if r["asked"] >= 5 and r["answer_pct"] is not None]
+        if by_rate:
+            worst = min(by_rate, key=lambda r: r["answer_pct"])
+            out.append(f"{worst['member']} gets left on read the most "
+                       f"({100 - worst['answer_pct']:.0f}% of questions unanswered).")
+    jokes = analyses.get("jokes")
+    if jokes and jokes["jokes"]:
+        top_joke = jokes["jokes"][0]
+        out.append(f"Running joke: \"{top_joke['phrase']}\" "
+                   f"({top_joke['count']} times by {len(top_joke['members'])} people).")
     return out
 
 
@@ -1598,6 +1928,11 @@ CHART_CAPTIONS = {
     "media_by_year.png": "Media per year",
     "calls_over_time.png": "Calls per month",
     "unsent.png": "Unsent messages per member",
+    "emoji_timeline.png": "Favorite emojis over the years",
+    "questions_asked.png": "Questions asked per member",
+    "question_speed.png": "Median time to answer a question",
+    "topics_by_year.png": "What the chat was about each year",
+    "inside_jokes.png": "Running jokes",
 }
 
 
@@ -1690,6 +2025,49 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates):
                              f"<p class='muted'>Scored {senti['messages_scored']} messages; "
                              f"English-only VADER, may be noisy on mixed-language chat.</p>"
                              + _table(["Member", "Avg sentiment"], rows)))
+    emo = analyses.get("emojis")
+    if emo and emo["per_member"]:
+        rows = []
+        for member, counter in sorted(emo["per_member"].items(),
+                                      key=lambda kv: -sum(kv[1].values())):
+            rows.append((html_lib.escape(member), f"{sum(counter.values()):,}",
+                         str(emo["emojis_per_100"].get(member, 0)),
+                         " ".join(e for e, _ in counter.most_common(3))))
+        sections.append(_sec("emojis", "Emoji report",
+                             _table(["Member", "Emojis", "Emojis/100", "Top emojis"], rows)))
+    qst = analyses.get("questions")
+    if qst and qst["table"]:
+        rows = []
+        for r in qst["table"]:
+            ans = "n/a" if r["answer_pct"] is None else f"{r['answer_pct']}%"
+            med = "n/a" if r["median_m"] is None else f"{r['median_m']} min"
+            rows.append((html_lib.escape(r["member"]), str(r["asked"]), str(r["answered"]),
+                         ans, str(r["responses_given"]), med))
+        sections.append(_sec("questions", "Question dynamics",
+                             f"<p class='muted'>{qst['total_questions']} questions asked; "
+                             f"{qst['total_answered']} answered within an hour.</p>"
+                             + _table(["Member", "Asked", "Answered", "Answer %",
+                                       "Responses", "Median answer"], rows)))
+    topics = analyses.get("topics")
+    if topics and topics["by_year"]:
+        items = "".join(
+            f"<li><b>{y}</b>: " + ", ".join(
+                f"{html_lib.escape(w['word'])} ({w['count']})" for w in words) + "</li>"
+            for y, words in topics["by_year"].items())
+        sections.append(_sec("topics", "What the chat was about",
+                             "<ul>" + items + "</ul>"))
+    jokes = analyses.get("jokes")
+    if jokes and jokes["jokes"]:
+        rows = []
+        for j in jokes["jokes"]:
+            rows.append((f"<i>{html_lib.escape(j['phrase'])}</i>", str(j["count"]),
+                         html_lib.escape(", ".join(j["members"])),
+                         html_lib.escape(", ".join(str(y) for y in j["years"]))))
+        example = jokes["jokes"][0].get("example")
+        ex_html = (f"<p class='muted'>Example: &quot;{html_lib.escape(example)}&quot;</p>"
+                   if example else "")
+        sections.append(_sec("jokes", "Running jokes",
+                             ex_html + _table(["Phrase", "Times", "Members", "Years"], rows)))
     sections.append(_sec("charts", "Charts", imgs))
 
     nav = "".join(
@@ -1698,6 +2076,8 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates):
                            ("reactive", "Reactive"), ("pair_dynamics", "Pairs"),
                            ("monologues", "Monologues"), ("weirdest", "Weirdest"),
                            ("extremes", "Extremes"), ("sentiment", "Sentiment"),
+                           ("emojis", "Emoji report"), ("questions", "Questions"),
+                           ("topics", "Topics"), ("jokes", "Jokes"),
                            ("charts", "Charts")]
     )
     body = f"""<div class="topbar"><span class="brand">{html_lib.escape(title)} flashback</span>
@@ -1879,6 +2259,25 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates):
                         "per_member_longest": dict(analyses["monologues"]["per_member_longest"])}
                        if analyses.get("monologues") else None),
         "unsent": dict(analyses["unsent"]) if analyses.get("unsent") else None,
+        "emojis": ({"total": analyses["emojis"]["total_emojis"],
+                    "emojis_per_100": analyses["emojis"]["emojis_per_100"],
+                    "per_member": {m: [{"emoji": e, "count": c} for e, c in cnt.most_common(20)]
+                                   for m, cnt in analyses["emojis"]["per_member"].items()},
+                    "per_year": {y: [{"emoji": e, "count": c} for e, c in cnt.most_common(10)]
+                                 for y, cnt in analyses["emojis"]["per_year"].items()}}
+                   if analyses.get("emojis") else None),
+        "questions": ({"total": analyses["questions"]["total_questions"],
+                       "answered": analyses["questions"]["total_answered"],
+                       "unanswered": analyses["questions"]["unanswered_count"],
+                       "table": analyses["questions"]["table"]}
+                      if analyses.get("questions") else None),
+        "topics": (analyses["topics"]["by_year"]
+                   if analyses.get("topics") and analyses["topics"]["by_year"] else None),
+        "running_jokes": ([{"phrase": j["phrase"], "count": j["count"],
+                            "members": j["members"], "years": j["years"],
+                            "example": j["example"]}
+                           for j in analyses["jokes"]["jokes"]]
+                          if analyses.get("jokes") and analyses["jokes"]["jokes"] else None),
     }
     if analyses.get("track"):
         payload["tracked_terms"] = {t: {"count": d["count"],
@@ -1930,6 +2329,21 @@ def console_summary(title, stats, analyses, dates):
     unsent = analyses.get("unsent")
     if unsent and any(unsent.values()):
         print(f"  Unsent messages: {sum(unsent.values())}")
+    emo = analyses.get("emojis")
+    if emo and emo["per_year"]:
+        top_emoji = Counter(
+            {e: c for y in emo["per_year"].values() for e, c in y.items()}
+        ).most_common(1)
+        if top_emoji:
+            print(f"  Top emoji: {emoji_lib.demojize(top_emoji[0][0]).strip(':')} "
+                  f"({top_emoji[0][1]}x)")
+    qst = analyses.get("questions")
+    if qst and qst["total_questions"]:
+        print(f"  Questions: {qst['total_questions']} asked, "
+              f"{100 * qst['total_answered'] // max(1, qst['total_questions'])}% answered")
+    jokes = analyses.get("jokes")
+    if jokes and jokes["jokes"]:
+        print(f"  Running joke: \"{jokes['jokes'][0]['phrase']}\"")
 
 
 def load_track_file(path):
@@ -1953,7 +2367,11 @@ def process_thread(thread_dir, args):
         print(f"  [skip] {thread_dir}: no message files")
         return
     title, participants, raw = loaded
-    msgs = normalize_messages(raw)
+    try:
+        msgs = normalize_messages(raw, tz=args.tz)
+    except ValueError as exc:
+        print(f"  [error] {thread_dir}: {exc}")
+        return
     if not msgs:
         print(f"  [skip] {thread_dir}: no usable messages")
         return
@@ -1968,13 +2386,16 @@ def process_thread(thread_dir, args):
         apply_anonymization(msgs, anonymize_map(msgs))
         anonymized = True
 
-    oldest = datetime.fromtimestamp(msgs[0]["ts_ms"] / 1000).strftime("%Y-%m-%d %H:%M")
-    newest = datetime.fromtimestamp(msgs[-1]["ts_ms"] / 1000).strftime("%Y-%m-%d %H:%M")
+    _progress(args, "normalized")
+    oldest = msgs[0]["dt"].strftime("%Y-%m-%d %H:%M")
+    newest = msgs[-1]["dt"].strftime("%Y-%m-%d %H:%M")
     print(f"\n  Thread: {title}  ({len(msgs):,} messages, {oldest} -> {newest})")
 
+    _progress(args, "core stats")
     stats = core_stats(msgs)
     track_terms = [t.strip() for t in args.track.split(",") if t.strip()] if args.track else []
     track_terms = track_terms + [t for t in load_track_file(args.track_file) if t not in track_terms]
+    _progress(args, "analyses")
     analyses = {
         "yearly": yearly_recaps(msgs),
         "personality": personalities(msgs, top=args.top),
@@ -1999,16 +2420,25 @@ def process_thread(thread_dir, args):
         "wordcloud": word_cloud_data(msgs),
         "monologues": monologues(msgs),
         "unsent": unsent_stats(msgs),
+        "emojis": emoji_stats(msgs),
+        "questions": question_stats(msgs),
+        "topics": topic_words(msgs),
+        "jokes": inside_jokes(msgs),
     }
 
     out_dir = Path(args.output) / _slug(title)
+    _progress(args, "charts")
     write_charts(msgs, stats, analyses, out_dir, track_terms)
+    _progress(args, "writing")
     write_summary(title, stats, analyses, analyses["track"], out_dir, anonymized,
                   [oldest[:10], newest[:10]])
     write_report_html(title, stats, analyses, out_dir, anonymized, [oldest[:10], newest[:10]])
     if args.json:
         write_summary_json(title, stats, analyses, out_dir, anonymized, [oldest[:10], newest[:10]])
     console_summary(title, stats, analyses, [oldest[:10], newest[:10]])
+    if args.progress:
+        sys.stderr.write("\r" + " " * 40 + "\r")
+        sys.stderr.flush()
     print(f"  Wrote output to {out_dir}")
     print(f"  First message: {oldest}  |  Last message: {newest}")
     if not args.anonymize:
@@ -2019,6 +2449,12 @@ def _slug(name):
     return re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_").lower() or "thread"
 
 
+def _progress(args, phase):
+    if args.progress:
+        sys.stderr.write(f"\r  [{phase}] analyzing...")
+        sys.stderr.flush()
+
+
 def serve(thread_dirs, args):
     from chat_ui import run_server
     threads = []
@@ -2027,7 +2463,11 @@ def serve(thread_dirs, args):
         if loaded is None:
             continue
         title, participants, raw = loaded
-        msgs = normalize_messages(raw)
+        try:
+            msgs = normalize_messages(raw, tz=args.tz)
+        except ValueError as exc:
+            print(f"  [error] {d}: {exc}")
+            continue
         if not msgs:
             print(f"  [skip] {d}: no usable messages")
             continue
@@ -2044,6 +2484,19 @@ def serve(thread_dirs, args):
     return 0
 
 
+def _thread_fingerprint(thread_dir):
+    files = sorted(thread_dir.glob("message_*.json"), key=numeric_key)
+    return [[f.name, f.stat().st_size, f.stat().st_mtime_ns] for f in files]
+
+
+def _config_signature(args):
+    return json.dumps({
+        "year": args.year, "anonymize": args.anonymize, "top": args.top,
+        "track": sorted(t.strip() for t in args.track.split(",") if t.strip()) if args.track else [],
+        "tz": args.tz or "",
+    }, sort_keys=True)
+
+
 def run(args):
     thread_dirs = find_thread_dirs(args.input)
     if not thread_dirs:
@@ -2055,12 +2508,48 @@ def run(args):
         for d in thread_dirs[:20]:
             print(f"  - {d}")
         print("Processing all threads...")
+    state_path = Path(args.output) / ".chatflashback_state.json"
+    state = {}
+    if args.incremental and state_path.exists():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            state = {}
+    cfg_sig = _config_signature(args)
     for d in thread_dirs:
-        process_thread(d, args)
+        if args.incremental:
+            key = str(Path(d).resolve())
+            prev = state.get(key)
+            if isinstance(prev, dict) and prev.get("cfg") == cfg_sig \
+                    and prev.get("fp") == _thread_fingerprint(d):
+                print(f"  [skip] {d}: unchanged since last run")
+                continue
+            process_thread(d, args)
+            state[key] = {"fp": _thread_fingerprint(d), "cfg": cfg_sig}
+        else:
+            process_thread(d, args)
+    if args.incremental:
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
     return 0
 
 
+def _join_tz_arg(argv):
+    out = []
+    i = 0
+    while i < len(argv):
+        tok = argv[i]
+        if tok in ("--tz",) and i + 1 < len(argv) and argv[i + 1].startswith("-"):
+            out.append(tok + "=" + argv[i + 1])
+            i += 2
+            continue
+        out.append(tok)
+        i += 1
+    return out
+
+
 def main(argv=None):
+    argv = _join_tz_arg(list(sys.argv[1:]) if argv is None else list(argv))
     parser = argparse.ArgumentParser(
         prog="analyze_chat.py",
         description=(
@@ -2091,6 +2580,26 @@ def main(argv=None):
                         help="Start the local chat reader web UI instead of writing reports")
     parser.add_argument("--port", type=int, default=8080,
                         help="Port for --serve (default: 8080)")
+    parser.add_argument("--tz", default="",
+                        help="Timezone for analysis, e.g. +03:00 or America/New_York "
+                             "(Messenger timestamps are UTC; default is your system timezone)")
+    parser.add_argument("--config", default="",
+                        help="JSON config file with any of the CLI options")
+    parser.add_argument("--progress", action="store_true",
+                        help="Show phase progress while analyzing")
+    parser.add_argument("--incremental", action="store_true",
+                        help="Skip threads that are unchanged since the last run")
+    pre = parser.parse_args(argv)
+    if pre.config:
+        try:
+            cfg = json.loads(Path(pre.config).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"  [warn] cannot read config {pre.config}: {exc}")
+            cfg = {}
+        if isinstance(cfg, dict):
+            parser.set_defaults(**{str(k).replace("-", "_"): v for k, v in cfg.items()})
+        else:
+            print(f"  [warn] config {pre.config} must be a JSON object")
     args = parser.parse_args(argv)
     return run(args)
 

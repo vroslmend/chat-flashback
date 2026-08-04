@@ -24,13 +24,20 @@ Runs locally. Your data is not uploaded anywhere.
 - Hourly radar profiles. Each member's 24-hour activity shape.
 - Word clouds. Overall and per-member, generated with `wordcloud`.
 - Monologues and unsent messages. Longest solo runs ("could've been an email") and `is_unsent`.
+- Emoji report. Emoji counts per member and a timeline of favorite emojis over the years.
+- Question dynamics. Who asks questions, who answers, who gets left on read, answer speed.
+- What the chat was about. TF-IDF topic words per year.
+- Running jokes. Repeated phrases that look like inside jokes (frequency, members, years).
 - Message-length and word trends over time.
 - Sentiment (VADER). Average mood per member and per year.
 - Weirdest statements. All-caps, 3am, punctuation-spiral, and extreme-length messages.
 - Self-contained `report.html` with all charts embedded (share one file). Sticky nav,
   dark/light toggle, and filterable, sortable tables.
-- Local chat reader (`--serve`). Browse the chat in a Messenger-style web UI.
+- Local chat reader (`--serve`). Browse the chat in a Messenger-style web UI, with
+  "on this day" nostalgia, random memories, regex search, and a theme toggle.
 - `--anonymize`. Replaces names with Person A, Person B in all output.
+- `--tz`, `--config`, `--progress`, and `--incremental` for timezones, config files,
+  progress output, and skipping unchanged threads.
 - Supports group and 1-on-1 chats. Detects multiple threads in one export.
 
 ## Requirements
@@ -41,9 +48,18 @@ Python 3.8+.
 pip install -r requirements.txt
 ```
 
+Or install as a package, which gives you a `chatflashback` command:
+
+```bash
+pip install .
+chatflashback --input data --output output
+```
+
 Optional extras that the tool skips gracefully if missing:
 - `vaderSentiment` powers sentiment (English-only, may be noisy on mixed-language chats).
 - `wordcloud` powers the word clouds.
+
+Install both with `pip install ".[full]"`.
 
 ## Usage
 
@@ -65,8 +81,37 @@ Options:
 | `--json` | Also write `summary.json` with the report data as structured JSON |
 | `--serve` | Start the local chat reader web UI instead of writing reports |
 | `--port` | Port for `--serve` (default: 8080) |
+| `--tz` | Timezone for analysis, e.g. `+03:00` or `America/New_York` (Messenger timestamps are UTC; default is your system timezone) |
+| `--config` | JSON config file with any of the options above |
+| `--progress` | Show phase progress while analyzing |
+| `--incremental` | Skip threads that are unchanged since the last run |
 
 Writes `summary.md`, `report.html`, and PNG charts into `output/<thread>/`.
+
+### Config file
+
+Pass options in a JSON file instead of on the command line. CLI flags still win.
+
+```json
+{
+  "input": "data",
+  "output": "out",
+  "top": 15,
+  "json": true,
+  "anonymize": false,
+  "track": "lol, bro"
+}
+```
+
+```bash
+python analyze_chat.py --config config.json
+```
+
+### Incremental runs
+
+`--incremental` records a fingerprint (file names, sizes, mtimes) for each thread in
+`output/.chatflashback_state.json` and skips threads that have not changed since the
+last run. Changing flags like `--year` or `--top` forces a re-run.
 
 ## Chat reader
 
@@ -80,12 +125,16 @@ opens a Messenger-style reader:
 - Infinite-scroll feed grouped by day, newest or oldest first
 - Sender color chips, inline reactions, media thumbnails, shares and call messages
 - Reply threading, "N years ago" badges, subtle sentiment tint
-- Debounced full-text search and per-member filters
-- A jump-to-date control and a link to the full report
+- Full-text search (with a `.*` regex toggle) and per-member filters
+- A jump-to-date control, an "On this day" view across the years, and a random-memory
+  "Surprise me" button
+- A light/dark theme toggle (remembered between visits)
+- A link to the full report
 
 Media files are served from the export folder only; paths are resolved inside the
 thread directory so nothing outside it can be read. Search is a simple substring
-scan over the messages, so it is fast enough for everyday use on large chats.
+scan over the messages (regex is opt-in), so it is fast enough for everyday use on
+large chats.
 
 ## Getting your Messenger data
 
@@ -129,10 +178,11 @@ Sample output from the synthetic thread is in `examples/`:
 - `report.html` - the same report as a single self-contained HTML file
 - `summary.json` - the report data as structured JSON
 - PNG charts: messages per year, activity heatmap, pace trends, activity by
-  hour/weekday, top members, top words, word clouds, yearly recap, pair dynamics,
-  hourly radar, reaction dynamics, response speed, swear stats, tracked terms,
-  domains, media, reply chains, ghosting, monologues, conversation starters,
-  monthly timeline, word trends, and sentiment
+  hour/weekday, top members, top words, word clouds, emoji timeline, yearly recap,
+  pair dynamics, hourly radar, reaction dynamics, question dynamics, topics per
+  year, running jokes, response speed, swear stats, tracked terms, domains, media,
+  reply chains, ghosting, monologues, conversation starters, monthly timeline,
+  word trends, and sentiment
 
 ![Activity heatmap](examples/activity_heatmap.png)
 

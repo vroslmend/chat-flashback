@@ -8,6 +8,9 @@ filters, full-text search, reply threading, media, and sentiment tinting.
 import bisect
 import json
 import mimetypes
+import random
+import re
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -84,9 +87,9 @@ class ThreadIndex:
             "has_replies": bool(self.by_id),
         }
 
-    def page(self, before=None, after=None, member=None, q=None, limit=_PAGE_SIZE):
+    def page(self, before=None, after=None, member=None, q=None, limit=_PAGE_SIZE, regex=False):
         if q:
-            return self._search(q, member, limit)
+            return self._search(q, member, limit, regex)
         pairs = self.member_pairs.get(member) if member else self.all_pairs
         n = len(pairs)
         if before is not None:
@@ -111,19 +114,55 @@ class ThreadIndex:
                 "next_before": next_before, "next_after": next_after,
                 "search": False}
 
-    def _search(self, q, member, limit):
+    def _search(self, q, member, limit, regex=False):
         ql = q.lower()
+        pattern = None
+        if regex:
+            try:
+                pattern = re.compile(q, re.IGNORECASE)
+            except re.error:
+                pattern = None
         matches = []
         for m in self.msgs:
             if member and m["sender"] != member:
                 continue
-            if ql in (m["content"] or "").lower():
+            content = m["content"] or ""
+            if pattern is not None:
+                hit = pattern.search(content) is not None
+            else:
+                hit = ql in content.lower()
+            if hit:
                 matches.append(m)
                 if len(matches) >= limit:
                     break
         return {"messages": [self._to_json_msg(m) for m in matches],
                 "next_before": None, "next_after": None,
                 "search": True, "total_matches": len(matches)}
+
+    def day(self, month, day, limit=_PAGE_SIZE):
+        years = sorted({m["dt"].year for m in self.msgs})
+        out = []
+        for y in years:
+            try:
+                start = datetime(y, month, day, 0, 0).timestamp() * 1000
+                end = datetime(y, month, day, 23, 59, 59, 999000).timestamp() * 1000
+            except ValueError:
+                continue
+            lo = bisect.bisect_left(self.all_pairs, (start, -1))
+            hi = bisect.bisect_right(self.all_pairs, (end, 10 ** 15))
+            for _, i in self.all_pairs[lo:hi]:
+                out.append(i)
+        out.sort(key=lambda i: self.msgs[i]["ts_ms"])
+        return {"messages": [self.to_json(i) for i in out[:limit]],
+                "total": len(out), "years": years}
+
+    def random_memory(self):
+        reacted = [i for i, m in enumerate(self.msgs) if m["reactions"]]
+        long_text = [i for i, m in enumerate(self.msgs)
+                     if m["content"] and len(m["content"]) > 40]
+        pool = reacted or long_text or list(range(len(self.msgs)))
+        idx = random.choice(pool)
+        return {"message": self.to_json(idx)}
 
     def _to_json_msg(self, m):
         return self.to_json(self.msgs.index(m))
@@ -190,6 +229,10 @@ def make_handler(threads, output_dir):
                 if sub[0] == "api":
                     if len(sub) >= 2 and sub[1] == "messages":
                         return self._messages(thread, query)
+                    if len(sub) >= 2 and sub[1] == "day":
+                        return self._day(thread, query)
+                    if len(sub) >= 2 and sub[1] == "random":
+                        return self._json(thread.random_memory())
                     return self._json(thread.meta())
                 if sub[0] == "report.html":
                     report = output_dir / slug / "report.html"
@@ -231,10 +274,19 @@ your machine.</p>
             after = _read_int(query, "after")
             member = (query.get("member") or [None])[0]
             q = (query.get("q") or [None])[0]
+            regex = (query.get("re") or [""])[0] == "1"
             limit = _read_int(query, "limit") or _PAGE_SIZE
             return self._json(thread.page(before=before, after=after,
                                           member=member or None, q=q or None,
-                                          limit=limit))
+                                          limit=limit, regex=regex))
+
+        def _day(self, thread, query):
+            date = (query.get("date") or [""])[0]
+            try:
+                month, day = int(date[5:7]), int(date[8:10])
+            except (ValueError, IndexError):
+                return self._send(400, "date must be YYYY-MM-DD")
+            return self._json(thread.day(month, day))
 
     return Handler
 
@@ -252,26 +304,30 @@ _VIEWER = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__ | chat-flashback</title>
 <style>
-:root{--bg:#17191f;--panel:#20242d;--border:#2a2f3a;--fg:#e8e8e8;--muted:#9aa0a6;--me:#5b8ff9}
+:root{--bg:#17191f;--panel:#20242d;--border:#2a2f3a;--fg:#e8e8e8;--muted:#9aa0a6;--me:#5b8ff9;--hover:rgba(255,255,255,0.04);--quote:rgba(255,255,255,0.03)}
+[data-theme="light"]{--bg:#f7f8fa;--panel:#ffffff;--border:#e3e5e8;--fg:#202124;--muted:#777;--hover:rgba(0,0,0,0.04);--quote:rgba(0,0,0,0.02)}
 *{box-sizing:border-box}
 body{font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;background:var(--bg);color:var(--fg);line-height:1.45}
 .topbar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--border)}
 .topbar h1{font-size:16px;margin:0 12px 0 0}
 .topbar input,.topbar select,.topbar button{padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);font-size:13px}
 #q{flex:1;min-width:160px}
+button{cursor:pointer}
+button.active{background:var(--me);color:#fff;border-color:var(--me)}
 .count{color:var(--muted);font-size:12px}
 main{max-width:760px;margin:0 auto;padding:0 16px 120px}
 .day{position:sticky;top:52px;z-index:10;display:flex;align-items:center;gap:10px;margin:22px 0 8px;font-size:12px;color:var(--muted)}
 .day::before,.day::after{content:"";flex:1;height:1px;background:var(--border)}
 .msg{display:flex;gap:10px;margin:2px 0;padding:4px 10px;border-radius:10px}
-.msg:hover{background:rgba(255,255,255,0.04)}
+.msg:hover{background:var(--hover)}
 .dot{width:30px;height:30px;border-radius:50%;flex:0 0 30px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#111}
 .body{flex:1;min-width:0}
 .sender{font-size:12px;font-weight:700;margin-bottom:2px}
 .text{font-size:14px;word-wrap:break-word;white-space:pre-wrap}
 .time{font-size:11px;color:var(--muted);margin-left:6px;font-weight:400}
-.quote{border-left:3px solid var(--border);padding:2px 8px;margin:2px 0 4px;font-size:12px;color:var(--muted);background:rgba(255,255,255,0.03);border-radius:4px}
+.quote{border-left:3px solid var(--border);padding:2px 8px;margin:2px 0 4px;font-size:12px;color:var(--muted);background:var(--quote);border-radius:4px}
 .badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;background:#3d2c5a;color:#c9b6ff;margin-left:6px}
+[data-theme="light"] .badge{background:#e8e0ff;color:#5b3fa8}
 .unsent{text-decoration:line-through;opacity:.6}
 .media{margin:6px 0}
 .media img{max-width:220px;max-height:220px;border-radius:10px;border:1px solid var(--border);display:block}
@@ -288,12 +344,16 @@ main{max-width:760px;margin:0 auto;padding:0 16px 120px}
 <div class="topbar">
 <h1>__TITLE__</h1>
 <input id="q" placeholder="Search messages..."/>
+<button id="re" title="Toggle regex search" aria-label="Toggle regex search">.*</button>
 <select id="member"><option value="">Everyone</option></select>
 <select id="order">
 <option value="newest">Newest first</option>
 <option value="oldest">Oldest first</option>
 </select>
 <input id="jump" type="date" title="Jump to date"/>
+<button id="oday" title="Show this day in every year">On this day</button>
+<button id="surprise" title="Random memory">Surprise me</button>
+<button id="theme" title="Toggle theme" aria-label="Toggle theme">Light</button>
 <span class="count" id="count"></span>
 <a href="report.html" style="color:#5b8ff9;font-size:13px">Report</a>
 </div>
@@ -305,7 +365,9 @@ var feed=document.getElementById('feed'), loader=document.getElementById('loader
 var qEl=document.getElementById('q'), memberEl=document.getElementById('member');
 var orderEl=document.getElementById('order'), jumpEl=document.getElementById('jump');
 var countEl=document.getElementById('count');
-var state={before:null,after:null,q:'',member:'',loading:false,done:false,searching:false};
+var reBtn=document.getElementById('re'), themeBtn=document.getElementById('theme');
+var odayBtn=document.getElementById('oday'), surpriseBtn=document.getElementById('surprise');
+var state={before:null,after:null,q:'',member:'',loading:false,done:false,searching:false,mode:'feed',regex:false};
 var lastDay='';
 var THREAD=null;
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -337,6 +399,7 @@ quote+body+mhtml+(reactions?'<div class="reactions">'+reactions+'</div>':'')+'</
 function appendMsgs(msgs){msgs.forEach(function(m){var k=dayKey(m.ts);if(k!==lastDay){if(lastDay!=='')feed.appendChild(document.createElement('div'));var d=document.createElement('div');d.className='day';d.textContent=dayLabel(m.ts);feed.appendChild(d);lastDay=k;}feed.insertAdjacentHTML('beforeend',msgHTML(m));});}
 function apiURL(){var u='/t/'+SLUG+'/api/messages?limit=400';
 if(state.q){u+='&q='+encodeURIComponent(state.q);}
+if(state.regex)u+='&re=1';
 if(state.member)u+='&member='+encodeURIComponent(state.member);
 if(state.before!=null)u+='&before='+state.before;
 if(state.after!=null)u+='&after='+state.after;
@@ -349,7 +412,22 @@ appendMsgs(data.messages);
 if(data.next_before!=null){state.before=data.next_before;}else if(data.next_after!=null){state.after=data.next_after;}else{state.done=true;}
 countEl.textContent=feed.querySelectorAll('.msg').length+' / '+THREAD.total.toLocaleString()+' messages';
 if(state.done){loader.textContent='End of history.';}}).catch(function(){state.loading=false;loader.textContent='Error loading.';});}
-function reset(mode){state.loading=false;state.done=false;state.before=null;state.after=null;feed.innerHTML='';lastDay='';loader.style.display='';if(mode==='search'){state.searching=true;}else{state.searching=false;}loadMore();}
+function reset(mode){state.loading=false;state.done=false;state.before=null;state.after=null;state.mode='feed';feed.innerHTML='';lastDay='';loader.style.display='';if(mode==='search'){state.searching=true;}else{state.searching=false;}loadMore();}
+function onThisDay(dateStr){state.mode='day';state.done=false;state.loading=false;feed.innerHTML='';lastDay='';loader.style.display='';
+fetch('/t/'+SLUG+'/api/day?date='+encodeURIComponent(dateStr)).then(function(r){return r.json();}).then(function(data){
+loader.style.display='none';state.done=true;
+var byYear={};data.messages.forEach(function(m){var y=new Date(m.ts).getFullYear();(byYear[y]=byYear[y]||[]).push(m);});
+var years=Object.keys(byYear).sort();
+countEl.textContent=data.total+' message(s) on '+dateStr.slice(0,7)+dateStr.slice(5)+' across '+(years.length||0)+' year(s)';
+if(years.length===0){feed.innerHTML='<div class="empty">Nothing happened on this day.</div>';return;}
+years.forEach(function(y){var d=document.createElement('div');d.className='day';d.textContent=y+' ('+byYear[y].length+' message'+(byYear[y].length===1?'':'s')+')';feed.appendChild(d);byYear[y].forEach(function(m){feed.insertAdjacentHTML('beforeend',msgHTML(m));});});
+}).catch(function(){loader.style.display='none';state.done=true;feed.innerHTML='<div class="empty">Error loading.</div>';});}
+function randomMemory(){state.mode='random';state.done=true;state.loading=false;feed.innerHTML='';lastDay='';loader.style.display='none';
+fetch('/t/'+SLUG+'/api/random').then(function(r){return r.json();}).then(function(d){
+countEl.textContent='Random memory (click again for another)';
+feed.insertAdjacentHTML('beforeend',msgHTML(d.message));
+feed.insertAdjacentHTML('beforeend','<div style="text-align:center;margin-top:16px"><button onclick="randomMemory()">Another</button></div>');
+}).catch(function(){feed.innerHTML='<div class="empty">Error loading.</div>';});}
 var io=new IntersectionObserver(function(entries){if(entries[0].isIntersecting)loadMore();},{rootMargin:'600px'});
 io.observe(loader);
 qEl.addEventListener('input',function(){var v=qEl.value.trim();if(state.q===v)return;state.q=v;reset(v?'search':'');});
@@ -357,7 +435,14 @@ memberEl.addEventListener('change',function(){state.member=memberEl.value;reset(
 orderEl.addEventListener('change',function(){reset(state.q?'search':'');});
 jumpEl.addEventListener('change',function(){if(!jumpEl.value)return;var d=new Date(jumpEl.value+'T00:00:00');
 if(orderEl.value==='newest'){state.before=d.getTime()+864e5;state.after=null;}else{state.after=d.getTime()-864e5;state.before=null;}
-state.done=false;feed.innerHTML='';lastDay='';loadMore();});
+state.mode='feed';state.done=false;feed.innerHTML='';lastDay='';loadMore();});
+reBtn.addEventListener('click',function(){state.regex=!state.regex;reBtn.classList.toggle('active',state.regex);
+if(state.q)reset('search');});
+odayBtn.addEventListener('click',function(){onThisDay(jumpEl.value||new Date().toISOString().slice(0,10));});
+surpriseBtn.addEventListener('click',randomMemory);
+themeBtn.addEventListener('click',function(){var t=document.documentElement.getAttribute('data-theme')==='light'?'dark':'light';applyTheme(t);localStorage.setItem('cf-theme',t);});
+function applyTheme(t){if(t==='light'){document.documentElement.setAttribute('data-theme','light');themeBtn.textContent='Dark';}else{document.documentElement.removeAttribute('data-theme');themeBtn.textContent='Light';}}
+if(localStorage.getItem('cf-theme')==='light')applyTheme('light');
 fetch('/t/'+SLUG+'/api/thread').then(function(r){return r.json();}).then(function(t){
 THREAD=t;
 memberEl.innerHTML='<option value="">Everyone</option>'+t.members.map(function(m){return '<option value="'+esc(m.name)+'">'+esc(m.name)+' ('+m.count.toLocaleString()+')</option>';}).join('');

@@ -8,12 +8,16 @@ SAMPLE = str(Path(__file__).resolve().parents[1] / "sample_data")
 
 
 def load_sample():
+    return ac.normalize_messages(load_raw())
+
+
+def load_raw():
+    import json as _json
     msgs = []
     for i in range(1, 5):
-        data = __import__("json").load(
-            open(f"{SAMPLE}/message_{i}.json", encoding="utf-8"))
+        data = _json.load(open(f"{SAMPLE}/message_{i}.json", encoding="utf-8"))
         msgs.extend(data["messages"])
-    return ac.normalize_messages(msgs)
+    return msgs
 
 
 def test_activity_heatmap_shape():
@@ -93,3 +97,65 @@ def test_new_charts_exist(tmp_path):
     for chart in ["activity_heatmap.png", "pace_trends.png", "reply_matrix.png",
                   "reaction_matrix.png", "hourly_radar.png", "monologues.png"]:
         assert (tmp_path / "saturday_squad" / chart).exists(), f"missing {chart}"
+
+
+def test_emoji_stats():
+    emo = ac.emoji_stats(load_sample())
+    assert emo["total_emojis"] > 0
+    assert emo["per_member"]
+    assert emo["per_year"]
+    assert all(p >= 0 for p in emo["emojis_per_100"].values())
+    assert sum(sum(c.values()) for c in emo["per_year"].values()) == emo["total_emojis"]
+
+
+def test_question_stats():
+    q = ac.question_stats(load_sample())
+    assert q["total_questions"] >= 1
+    assert q["table"]
+    assert sum(r["asked"] for r in q["table"]) == q["total_questions"]
+    assert 0 <= q["total_answered"] <= q["total_questions"]
+
+
+def test_topic_words():
+    topics = ac.topic_words(load_sample())
+    assert topics["by_year"]
+    assert topics["years"] == sorted(topics["years"])
+    words = topics["by_year"][topics["years"][0]]
+    assert words and all(w["count"] > 0 for w in words)
+    assert all(len(w["word"]) > 2 for w in words)
+
+
+def test_inside_jokes_synthetic():
+    from datetime import datetime, timedelta
+    base = datetime(2020, 1, 1)
+    msgs = []
+    n = 0
+    for year in range(2020, 2023):
+        for sender in ("Alice", "Bob", "Charlie"):
+            for _ in range(3):
+                ts = int((base.replace(year=year) + timedelta(days=n)).timestamp() * 1000)
+                msgs.append({"sender": sender, "ts_ms": ts, "content": "pizza friday night party",
+                             "mtype": "Generic", "reactions": [], "has_photo": False,
+                             "has_sticker": False, "photo_uris": [], "link": None,
+                             "call_duration": None, "reply_to": None, "is_unsent": False,
+                             "dt": base.replace(year=year) + timedelta(days=n)})
+                n += 1
+    jokes = ac.inside_jokes(msgs)
+    assert jokes["jokes"], "expected at least one running joke"
+    top = jokes["jokes"][0]
+    assert top["count"] >= 4
+    assert len(top["years"]) >= 2
+    assert len(top["members"]) >= 2
+
+
+def test_timezone_shift():
+    msgs = load_sample()
+    default = ac.core_stats(msgs)["by_hour"]
+    shifted = ac.core_stats(ac.normalize_messages(load_raw(), tz="+03:00"))["by_hour"]
+    assert sum(default.values()) == sum(shifted.values())
+
+
+def test_bad_timezone_rejected():
+    import pytest
+    with pytest.raises(ValueError):
+        ac.normalize_messages([], tz="not/a/zone")

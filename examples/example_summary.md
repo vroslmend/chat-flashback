@@ -1,6 +1,6 @@
 # Saturday Squad flashback
 
-Generated 2026-08-04 13:14
+Generated 2026-08-04 14:14
 - **Period**: 2017-01-01 to 2026-01-01
 - **Total messages**: 94
 - **Members**: 4
@@ -259,6 +259,40 @@ Row replies to column (within 1 hour), and row reacts to column's messages:
 
 Record solo run: **Charlie** with 3 messages (2021-02-14 08:00).
 
+## Emoji report
+
+**1** emojis in total. Emojis per 100 messages:
+
+| Member | Emojis | Emojis/100 msgs | Top 3 emojis |
+|---|---|---|---|
+| Alice | 1 | 3.8 | 😎 |
+
+## Question dynamics
+
+**3** questions asked; **3** got a reply within an hour (100%).
+
+| Member | Asked | Answered | Answer % | Responses given | Median answer |
+|---|---|---|---|---|---|
+| Charlie | 2 | 2 | 100.0% | 0 | n/a |
+| Alice | 1 | 1 | 100.0% | 0 | n/a |
+| Bob | 0 | 0 | n/a | 1 | 30.0 min |
+| Dana | 0 | 0 | n/a | 2 | 27.0 min |
+
+## What the chat was about
+
+Top topic words per year (tf-idf):
+
+- **2017**: **usual** (2), **spot** (2), **happy** (2), **told** (1), **stressing** (1), **saturday** (1)
+- **2018**: **morning** (2), **helmet** (2), **wow** (1), **since** (1), **rip** (1), **nerd** (1)
+- **2019**: **shawarma** (3), **trip** (2), **life** (2), **wedding** (1), **though** (1), **seriously** (1)
+- **2020**: **whole** (2), **out** (2), **hour** (2), **bro** (2), **woke** (1), **tried** (1)
+- **2021**: **pregnant** (2), **work** (1), **quiet** (1), **news** (1), **moving** (1), **matches** (1)
+- **2022**: **send** (2), **party** (2), **full** (2), **said** (2), **wishing** (1), **unexpectedly** (1)
+- **2023**: **reunion** (2), **shawarma** (2), **thought** (1), **squad** (1), **real** (1), **place** (1)
+- **2024**: **mid** (2), **love** (2), **valentine's** (1), **untrustworthy** (1), **tonight** (1), **thinking** (1)
+- **2025**: **already** (2), **bro** (3), **booked** (2), **waiting** (1), **payday** (1), **happening** (1)
+- **2026**: **ten** (2), **years** (2), **we'll** (1), **next** (1), **many** (1), **here's** (1)
+
 ## Charts
 
 ![activity_by_hour.png](activity_by_hour.png)
@@ -268,6 +302,8 @@ Record solo run: **Charlie** with 3 messages (2021-02-14 08:00).
 ![activity_heatmap.png](activity_heatmap.png)
 
 ![conversation_starters.png](conversation_starters.png)
+
+![emoji_timeline.png](emoji_timeline.png)
 
 ![ghosting.png](ghosting.png)
 
@@ -288,6 +324,10 @@ Record solo run: **Charlie** with 3 messages (2021-02-14 08:00).
 ![most_reacted.png](most_reacted.png)
 
 ![pace_trends.png](pace_trends.png)
+
+![question_speed.png](question_speed.png)
+
+![questions_asked.png](questions_asked.png)
 
 ![reaction_matrix.png](reaction_matrix.png)
 
@@ -314,6 +354,8 @@ Record solo run: **Charlie** with 3 messages (2021-02-14 08:00).
 ![top_members.png](top_members.png)
 
 ![top_words.png](top_words.png)
+
+![topics_by_year.png](topics_by_year.png)
 
 ![tracked_terms.png](tracked_terms.png)
 

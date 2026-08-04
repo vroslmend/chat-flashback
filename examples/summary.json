@@ -1,6 +1,6 @@
 {
   "title": "Saturday Squad",
-  "generated": "2026-08-04 13:14",
+  "generated": "2026-08-04 14:14",
   "anonymized": false,
   "period": {
     "start": "2017-01-01",
@@ -1270,6 +1270,390 @@
     }
   },
   "unsent": null,
+  "emojis": {
+    "total": 1,
+    "emojis_per_100": {
+      "Alice": 3.8
+    },
+    "per_member": {
+      "Alice": [
+        {
+          "emoji": "😎",
+          "count": 1
+        }
+      ]
+    },
+    "per_year": {
+      "2025": [
+        {
+          "emoji": "😎",
+          "count": 1
+        }
+      ]
+    }
+  },
+  "questions": {
+    "total": 3,
+    "answered": 3,
+    "unanswered": 0,
+    "table": [
+      {
+        "member": "Charlie",
+        "asked": 2,
+        "answered": 2,
+        "answer_pct": 100.0,
+        "responses_given": 0,
+        "median_m": null
+      },
+      {
+        "member": "Alice",
+        "asked": 1,
+        "answered": 1,
+        "answer_pct": 100.0,
+        "responses_given": 0,
+        "median_m": null
+      },
+      {
+        "member": "Bob",
+        "asked": 0,
+        "answered": 0,
+        "answer_pct": null,
+        "responses_given": 1,
+        "median_m": 30.0
+      },
+      {
+        "member": "Dana",
+        "asked": 0,
+        "answered": 0,
+        "answer_pct": null,
+        "responses_given": 2,
+        "median_m": 27.0
+      }
+    ]
+  },
+  "topics": {
+    "2017": [
+      {
+        "word": "usual",
+        "score": 0.1277,
+        "count": 2
+      },
+      {
+        "word": "spot",
+        "score": 0.1118,
+        "count": 2
+      },
+      {
+        "word": "happy",
+        "score": 0.1118,
+        "count": 2
+      },
+      {
+        "word": "told",
+        "score": 0.0751,
+        "count": 1
+      },
+      {
+        "word": "stressing",
+        "score": 0.0751,
+        "count": 1
+      },
+      {
+        "word": "saturday",
+        "score": 0.0751,
+        "count": 1
+      }
+    ],
+    "2018": [
+      {
+        "word": "morning",
+        "score": 0.1999,
+        "count": 2
+      },
+      {
+        "word": "helmet",
+        "score": 0.1999,
+        "count": 2
+      },
+      {
+        "word": "wow",
+        "score": 0.1176,
+        "count": 1
+      },
+      {
+        "word": "since",
+        "score": 0.1176,
+        "count": 1
+      },
+      {
+        "word": "rip",
+        "score": 0.1176,
+        "count": 1
+      },
+      {
+        "word": "nerd",
+        "score": 0.1176,
+        "count": 1
+      }
+    ],
+    "2019": [
+      {
+        "word": "shawarma",
+        "score": 0.1606,
+        "count": 3
+      },
+      {
+        "word": "trip",
+        "score": 0.1341,
+        "count": 2
+      },
+      {
+        "word": "life",
+        "score": 0.1341,
+        "count": 2
+      },
+      {
+        "word": "wedding",
+        "score": 0.0902,
+        "count": 1
+      },
+      {
+        "word": "though",
+        "score": 0.0902,
+        "count": 1
+      },
+      {
+        "word": "seriously",
+        "score": 0.0902,
+        "count": 1
+      }
+    ],
+    "2020": [
+      {
+        "word": "whole",
+        "score": 0.092,
+        "count": 2
+      },
+      {
+        "word": "out",
+        "score": 0.092,
+        "count": 2
+      },
+      {
+        "word": "hour",
+        "score": 0.092,
+        "count": 2
+      },
+      {
+        "word": "bro",
+        "score": 0.0581,
+        "count": 2
+      },
+      {
+        "word": "woke",
+        "score": 0.0541,
+        "count": 1
+      },
+      {
+        "word": "tried",
+        "score": 0.0541,
+        "count": 1
+      }
+    ],
+    "2021": [
+      {
+        "word": "pregnant",
+        "score": 0.242,
+        "count": 2
+      },
+      {
+        "word": "work",
+        "score": 0.1424,
+        "count": 1
+      },
+      {
+        "word": "quiet",
+        "score": 0.1424,
+        "count": 1
+      },
+      {
+        "word": "news",
+        "score": 0.1424,
+        "count": 1
+      },
+      {
+        "word": "moving",
+        "score": 0.1424,
+        "count": 1
+      },
+      {
+        "word": "matches",
+        "score": 0.1424,
+        "count": 1
+      }
+    ],
+    "2022": [
+      {
+        "word": "send",
+        "score": 0.1769,
+        "count": 2
+      },
+      {
+        "word": "party",
+        "score": 0.1769,
+        "count": 2
+      },
+      {
+        "word": "full",
+        "score": 0.1769,
+        "count": 2
+      },
+      {
+        "word": "said",
+        "score": 0.1547,
+        "count": 2
+      },
+      {
+        "word": "wishing",
+        "score": 0.104,
+        "count": 1
+      },
+      {
+        "word": "unexpectedly",
+        "score": 0.104,
+        "count": 1
+      }
+    ],
+    "2023": [
+      {
+        "word": "reunion",
+        "score": 0.2555,
+        "count": 2
+      },
+      {
+        "word": "shawarma",
+        "score": 0.1785,
+        "count": 2
+      },
+      {
+        "word": "thought",
+        "score": 0.1503,
+        "count": 1
+      },
+      {
+        "word": "squad",
+        "score": 0.1503,
+        "count": 1
+      },
+      {
+        "word": "real",
+        "score": 0.1503,
+        "count": 1
+      },
+      {
+        "word": "place",
+        "score": 0.1503,
+        "count": 1
+      }
+    ],
+    "2024": [
+      {
+        "word": "mid",
+        "score": 0.219,
+        "count": 2
+      },
+      {
+        "word": "love",
+        "score": 0.219,
+        "count": 2
+      },
+      {
+        "word": "valentine's",
+        "score": 0.1288,
+        "count": 1
+      },
+      {
+        "word": "untrustworthy",
+        "score": 0.1288,
+        "count": 1
+      },
+      {
+        "word": "tonight",
+        "score": 0.1288,
+        "count": 1
+      },
+      {
+        "word": "thinking",
+        "score": 0.1288,
+        "count": 1
+      }
+    ],
+    "2025": [
+      {
+        "word": "already",
+        "score": 0.3066,
+        "count": 2
+      },
+      {
+        "word": "bro",
+        "score": 0.2904,
+        "count": 3
+      },
+      {
+        "word": "booked",
+        "score": 0.2682,
+        "count": 2
+      },
+      {
+        "word": "waiting",
+        "score": 0.1803,
+        "count": 1
+      },
+      {
+        "word": "payday",
+        "score": 0.1803,
+        "count": 1
+      },
+      {
+        "word": "happening",
+        "score": 0.1803,
+        "count": 1
+      }
+    ],
+    "2026": [
+      {
+        "word": "ten",
+        "score": 0.3285,
+        "count": 2
+      },
+      {
+        "word": "years",
+        "score": 0.2874,
+        "count": 2
+      },
+      {
+        "word": "we'll",
+        "score": 0.1932,
+        "count": 1
+      },
+      {
+        "word": "next",
+        "score": 0.1932,
+        "count": 1
+      },
+      {
+        "word": "many",
+        "score": 0.1932,
+        "count": 1
+      },
+      {
+        "word": "here's",
+        "score": 0.1932,
+        "count": 1
+      }
+    ]
+  },
+  "running_jokes": null,
   "tracked_terms": {
     "shawarma": {
       "count": 5,

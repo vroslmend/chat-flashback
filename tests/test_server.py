@@ -50,3 +50,12 @@ def test_server_endpoints(tmp_path):
     assert data["search"] and data["total_matches"] >= 4
     data = json.loads(get("/t/saturday_squad/api/messages?member=Alice&limit=50"))
     assert data["messages"] and all(m["sender"] == "Alice" for m in data["messages"])
+    day = json.loads(get("/t/saturday_squad/api/day?date=2025-08-09"))
+    assert day["total"] >= 3
+    assert "years" in day
+    rnd = json.loads(get("/t/saturday_squad/api/random"))
+    assert "sender" in rnd["message"]
+    rex = json.loads(get("/t/saturday_squad/api/messages?q=%5Cb2018%5Cb&re=1&limit=5"))
+    assert rex["search"] and rex["total_matches"] >= 1
+    bad_re = json.loads(get("/t/saturday_squad/api/messages?q=%5B&re=1&limit=5"))
+    assert bad_re["search"] is True
