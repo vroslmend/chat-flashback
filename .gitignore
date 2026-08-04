@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Personal chat exports, never committed
+data/
+
+# Generated output
+output/
+
+# OS
+.DS_Store
+Thumbs.db

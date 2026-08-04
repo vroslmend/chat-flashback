@@ -1,0 +1,274 @@
+{
+  "participants": [
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Bob"
+    },
+    {
+      "name": "Charlie"
+    },
+    {
+      "name": "Dana"
+    }
+  ],
+  "messages": [
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1562205900000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "you have issues"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1570302000000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "trip was the best weekend of my life"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1570302060000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "the shawarma spot near the hotel though >>>>>"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1570302120000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "we need to go back just for that shawarma"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1570302180000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "that shawarma was life-changing, not even joking"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1570305600000,
+      "type": "share",
+      "is_unsent": false,
+      "share": {
+        "link": "https://scontent.example/photos/img_1.jpg",
+        "share_text": ""
+      },
+      "photos": [
+        {
+          "uri": "photos/img_1.jpg",
+          "creation_timestamp": 1570305600000
+        }
+      ]
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1584262800000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "lockdown means group call every night now. i've decided."
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1584262860000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "i have no say in this do i"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1584262920000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "correct"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1590012000000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "i tried to bake bread and the oven smoked out the whole house"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1590012060000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "PLEASE tell me you filmed it"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1590012120000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "i wish i had. the smoke alarm woke up the neighbors"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1598828400000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "started my own thing, gonna be a whole business by 2021",
+      "reactions": [
+        {
+          "reaction": "ð",
+          "act": "reacted",
+          "reactor": "Alice"
+        },
+        {
+          "reaction": "ð",
+          "act": "reacted",
+          "reactor": "Charlie"
+        },
+        {
+          "reaction": "❤️",
+          "act": "reacted",
+          "reactor": "Dana"
+        }
+      ]
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1598828700000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "that's sick bro"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1598828760000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "bro moment fr"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1601668800000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "this traffic is absolute shit, ive been stuck an hour"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1601668860000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "thats nothing, i once sat through a 3 hour jam, what the hell"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1601668920000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "lol get out of there man"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1601668980000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "damn that's brutal"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1613271600000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "cant sleep, this game is too addictive"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1613271660000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "one more match. just one."
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1613271720000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "ok that was 7 matches, dont judge me"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1638306000000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "guys I have news"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1638306060000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "you're pregnant"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1638306120000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "I'M PREGNANT??? no. im moving abroad for work."
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1638306180000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "close enough"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1638306300000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "oh this group chat is about to get very quiet"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1638307800000,
+      "type": "share",
+      "is_unsent": false,
+      "share": {
+        "link": "https://scontent.example/photos/img_2.jpg",
+        "share_text": ""
+      },
+      "photos": [
+        {
+          "uri": "photos/img_2.jpg",
+          "creation_timestamp": 1638307800000
+        }
+      ]
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1652184000000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "Dana's birthday party is gonna be legendary. Full send."
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1652184060000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "nobody said full send"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1652184120000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "i said it"
+    }
+  ],
+  "title": "Saturday Squad",
+  "is_still_participant": true,
+  "thread_type": "RegularGroup",
+  "thread_path": "inbox/saturdaysquad"
+}

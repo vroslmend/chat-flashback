@@ -1,0 +1,291 @@
+{
+  "participants": [
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Bob"
+    },
+    {
+      "name": "Charlie"
+    },
+    {
+      "name": "Dana"
+    }
+  ],
+  "messages": [
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1652184180000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "bro you're setting up your own surprise party lmaooo"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1652184240000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "shut up"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1668165060000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "it's 11:11, make a wish"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1668165120000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "wishing we all live in the same city again"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1668165180000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "ok that was unexpectedly deep"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1693558800000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "reunion confirmed for December. Everyone is coming."
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1693558860000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "THE SQUAD IS BACK",
+      "reactions": [
+        {
+          "reaction": "ð",
+          "act": "reacted",
+          "reactor": "Alice"
+        },
+        {
+          "reaction": "ð",
+          "act": "reacted",
+          "reactor": "Charlie"
+        },
+        {
+          "reaction": "ð",
+          "act": "reacted",
+          "reactor": "Dana"
+        }
+      ]
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1703098800000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "guys. The shawarma place. It's still there. I checked."
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1703098860000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "WE'RE GOING FIRST THING"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1703098920000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "this is the real reunion"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1703098980000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "ive thought about that shawarma every week for 4 years"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1703102400000,
+      "type": "share",
+      "is_unsent": false,
+      "share": {
+        "link": "https://scontent.example/photos/img_3.jpg",
+        "share_text": ""
+      },
+      "photos": [
+        {
+          "uri": "photos/img_3.jpg",
+          "creation_timestamp": 1703102400000
+        }
+      ]
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1707922800000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "happy valentine's to the only people i love"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1707922860000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "lol"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1707922920000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "cringe"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1707922980000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "we love you too charlie"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1721404800000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "anyone seen the new movie? thinking of going tonight"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1721405100000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "i saw it, it's mid"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1721405160000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "she said mid, im not going"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1721405220000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "this group has become untrustworthy"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1754683200000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "the trip is happening. Book your flights this week."
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1754683260000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "already booked 😎"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1754683320000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "already booked"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1754683380000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "im waiting for payday, DON'T judge me"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1754683440000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "bro..."
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1754683500000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "bro..."
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1754683560000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "BRO."
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1756749600000,
+      "type": "share",
+      "is_unsent": false,
+      "share": {
+        "link": "https://scontent.example/photos/img_4.jpg",
+        "share_text": ""
+      },
+      "photos": [
+        {
+          "uri": "photos/img_4.jpg",
+          "creation_timestamp": 1756749600000
+        }
+      ]
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1767225600000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "TEN YEARS OF THIS CHAT. I can't believe it"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1767225660000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "best ten years of my life",
+      "reactions": [
+        {
+          "reaction": "❤️",
+          "act": "reacted",
+          "reactor": "Alice"
+        },
+        {
+          "reaction": "❤️",
+          "act": "reacted",
+          "reactor": "Charlie"
+        },
+        {
+          "reaction": "❤️",
+          "act": "reacted",
+          "reactor": "Dana"
+        }
+      ]
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1767225780000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "here's to many more. let's go!!!"
+    }
+  ],
+  "title": "Saturday Squad",
+  "is_still_participant": true,
+  "thread_type": "RegularGroup",
+  "thread_path": "inbox/saturdaysquad"
+}

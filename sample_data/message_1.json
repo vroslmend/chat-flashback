@@ -1,0 +1,294 @@
+{
+  "participants": [
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Bob"
+    },
+    {
+      "name": "Charlie"
+    },
+    {
+      "name": "Dana"
+    }
+  ],
+  "messages": [
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1483272000000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "Happy new year lads!!",
+      "reactions": [
+        {
+          "reaction": "ð",
+          "act": "reacted",
+          "reactor": "Bob"
+        },
+        {
+          "reaction": "❤️",
+          "act": "reacted",
+          "reactor": "Charlie"
+        }
+      ]
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1483272300000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "happy new year! we actually meet this time pls"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1483272600000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "im in. dana you coming?"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1483275600000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "obv. when and where"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1484472600000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "saturday 6pm usual spot. dont be late"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1484473500000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "THE USUAL SPOT GOT SHUT DOWN LAST WEEK"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1484473560000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "??????"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1484473800000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "lol that's so on brand for us"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1486749600000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "whos up for games night?"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1486751400000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "me but i lose at everything so"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1497535200000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "guys I got the job!!!"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1497535260000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "CONGRATS BROOOOO"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1497535320000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "we're celebrating this weekend. no excuses"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1497535500000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "told u the interview was fine, u were stressing over nothing"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1514764740000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "see you all in 2018",
+      "reactions": [
+        {
+          "reaction": "❤️",
+          "act": "reacted",
+          "reactor": "Alice"
+        }
+      ]
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1521541800000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "this meeting is so boring i might die",
+      "reactions": [
+        {
+          "reaction": "ð¤£",
+          "act": "reacted",
+          "reactor": "Charlie"
+        },
+        {
+          "reaction": "ð",
+          "act": "reacted",
+          "reactor": "Bob"
+        }
+      ]
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1521541860000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "rip"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1527840000000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "morning crew"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1527840000000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "morning"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1527840060000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "ive been up since 5. couldnt sleep"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1527840120000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "go to bed nerd"
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1536526800000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "does anyone else think Bob's new haircut looks like a helmet"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1536526860000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "i can see this. i can see this"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1536526920000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "it really does look like a helmet"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1536526980000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "ok wow. okay"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1545760800000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "merry christmas everyone",
+      "reactions": [
+        {
+          "reaction": "ð",
+          "act": "reacted",
+          "reactor": "Bob"
+        },
+        {
+          "reaction": "ð",
+          "act": "reacted",
+          "reactor": "Alice"
+        },
+        {
+          "reaction": "ð",
+          "act": "reacted",
+          "reactor": "Charlie"
+        }
+      ]
+    },
+    {
+      "sender_name": "Alice",
+      "timestamp_ms": 1555081200000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "wedding trip booked!! 3 months!!!"
+    },
+    {
+      "sender_name": "Bob",
+      "timestamp_ms": 1555081260000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "cant believe charlie's marrying into money"
+    },
+    {
+      "sender_name": "Charlie",
+      "timestamp_ms": 1555081320000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "im right here you absolute donkey"
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1562205600000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "why is nobody awake",
+      "reactions": [
+        {
+          "reaction": "ð¤£",
+          "act": "reacted",
+          "reactor": "Alice"
+        }
+      ]
+    },
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1562205660000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "SERIOUSLY"
+    }
+  ],
+  "title": "Saturday Squad",
+  "is_still_participant": true,
+  "thread_type": "RegularGroup",
+  "thread_path": "inbox/saturdaysquad"
+}

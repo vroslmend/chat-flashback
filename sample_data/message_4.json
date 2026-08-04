@@ -1,0 +1,29 @@
+{
+  "participants": [
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Bob"
+    },
+    {
+      "name": "Charlie"
+    },
+    {
+      "name": "Dana"
+    }
+  ],
+  "messages": [
+    {
+      "sender_name": "Dana",
+      "timestamp_ms": 1767225900000,
+      "type": "text",
+      "is_unsent": false,
+      "content": "same time next decade, we'll still be here"
+    }
+  ],
+  "title": "Saturday Squad",
+  "is_still_participant": true,
+  "thread_type": "RegularGroup",
+  "thread_path": "inbox/saturdaysquad"
+}
