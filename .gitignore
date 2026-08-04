@@ -4,6 +4,7 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.pytest_cache/
 
 # Personal chat exports, never committed
 data/

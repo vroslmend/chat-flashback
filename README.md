@@ -70,6 +70,13 @@ A thread folder contains `message_1.json`, `message_2.json`, ... that you can po
 python analyze_chat.py --input sample_data --track "shawarma, bro"
 ```
 
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
 ## Examples
 
 Sample output from the synthetic thread is in `examples/`:

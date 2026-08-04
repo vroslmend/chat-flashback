@@ -83,15 +83,20 @@ def find_thread_dirs(root):
 
 
 def decode_messenger_text(text):
-    """Fix Messenger's double-encoded unicode (\\u00f0\\u009f... -> emoji)."""
+    """Fix Messenger's double-encoded unicode (literal \\u00xx escapes of UTF-8 bytes).
+
+    A double-encoded emoji arrives as the text "\\u00f0\\u009f\\u0091\\u008d".
+    Convert each escape to its byte value, then decode the bytes as UTF-8.
+    """
     if not text or "\\u00" not in text:
         return text
-    if all(ord(c) < 256 for c in text):
-        try:
-            return text.encode("latin1").decode("utf-8")
-        except (UnicodeDecodeError, UnicodeEncodeError):
-            pass
-    return text
+    fixed = re.sub(r"\\u00([0-9a-fA-F]{2})", lambda m: chr(int(m.group(1), 16)), text)
+    if any(ord(c) > 0xFF for c in fixed):
+        return text
+    try:
+        return fixed.encode("latin1").decode("utf-8")
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        return text
 
 
 def load_thread(thread_dir):
