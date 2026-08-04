@@ -44,8 +44,7 @@ STOPWORDS = {
     "time", "day", "year", "thing", "going", "make", "even", "still", "way", "well",
 }
 
-CENSOR_WORDS = {str(w) for w in Profanity().CENSOR_WORDSET}
-PROFANITY = Profanity()
+CENSOR_WORDS = {str(w).lower() for w in Profanity().CENSOR_WORDSET}
 
 PALETTE = ["#5b8ff9", "#5ad8a6", "#f6bd16", "#e8684a", "#6dc8ec", "#9270ca",
            "#ff9d4d", "#269a99", "#ff99c3", "#9fe6b8"]
@@ -378,16 +377,16 @@ def swear_stats(msgs):
     by_year = Counter()
     total_hits = 0
     for m in msgs:
-        text = m["content"] or ""
-        if not PROFANITY.contains_profanity(text):
-            continue
-        member_hits[m["sender"]] += 1
-        by_year[m["dt"].year] += 1
-        total_hits += 1
-        for w in tokenize(text):
+        found = False
+        for w in tokenize(m["content"]):
             if w in CENSOR_WORDS:
                 member_words[m["sender"]][w] += 1
                 word_totals[w] += 1
+                found = True
+        if found:
+            member_hits[m["sender"]] += 1
+            by_year[m["dt"].year] += 1
+            total_hits += 1
     return {
         "total_hits": total_hits,
         "member_hits": member_hits,
@@ -405,13 +404,16 @@ def custom_tracking(msgs, terms):
     for term in terms:
         per_member = Counter()
         by_year = Counter()
-        count = 0
-        for m in msgs:
-            if term in (m["content"] or "").lower():
-                count += 1
-                per_member[m["sender"]] += 1
-                by_year[m["dt"].year] += 1
-        results[term] = {"count": count, "per_member": per_member, "by_year": by_year}
+        results[term] = {"count": 0, "per_member": per_member, "by_year": by_year}
+    for m in msgs:
+        lc = (m["content"] or "").lower()
+        if not lc:
+            continue
+        for term, data in results.items():
+            if term in lc:
+                data["count"] += 1
+                data["per_member"][m["sender"]] += 1
+                data["by_year"][m["dt"].year] += 1
     return results
 
 
