@@ -53,7 +53,13 @@ def test_server_endpoints(tmp_path):
     assert data["search"] and data["total_matches"] >= 4
     data = json.loads(get("/t/saturday_squad/api/messages?member=Alice&limit=50"))
     assert data["messages"] and all(m["sender"] == "Alice" for m in data["messages"])
-    day = json.loads(get("/t/saturday_squad/api/day?date=2025-08-09"))
+    from collections import Counter
+    from datetime import datetime as _dt
+
+    dates = Counter(_dt.fromtimestamp(m["timestamp_ms"] / 1000).strftime("%Y-%m-%d")
+                    for m in msgs if m.get("timestamp_ms"))
+    query_date = dates.most_common(1)[0][0]
+    day = json.loads(get(f"/t/saturday_squad/api/day?date={query_date}"))
     assert day["total"] >= 3
     assert "years" in day
     rnd = json.loads(get("/t/saturday_squad/api/random"))
