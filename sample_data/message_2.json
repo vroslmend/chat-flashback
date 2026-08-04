@@ -19,35 +19,40 @@
       "timestamp_ms": 1562205900000,
       "type": "text",
       "is_unsent": false,
-      "content": "you have issues"
+      "content": "you have issues",
+      "id": "m31"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1570302000000,
       "type": "text",
       "is_unsent": false,
-      "content": "trip was the best weekend of my life"
+      "content": "trip was the best weekend of my life",
+      "id": "m32"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1570302060000,
       "type": "text",
       "is_unsent": false,
-      "content": "the shawarma spot near the hotel though >>>>>"
+      "content": "the shawarma spot near the hotel though >>>>>",
+      "id": "m33"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1570302120000,
       "type": "text",
       "is_unsent": false,
-      "content": "we need to go back just for that shawarma"
+      "content": "we need to go back just for that shawarma",
+      "id": "m34"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1570302180000,
       "type": "text",
       "is_unsent": false,
-      "content": "that shawarma was life-changing, not even joking"
+      "content": "that shawarma was life-changing, not even joking",
+      "id": "m35"
     },
     {
       "sender_name": "Charlie",
@@ -55,7 +60,7 @@
       "type": "share",
       "is_unsent": false,
       "share": {
-        "link": "https://scontent.example/photos/img_1.jpg",
+        "link": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
         "share_text": ""
       },
       "photos": [
@@ -63,49 +68,58 @@
           "uri": "photos/img_1.jpg",
           "creation_timestamp": 1570305600000
         }
-      ]
+      ],
+      "id": "m36"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1584262800000,
       "type": "text",
       "is_unsent": false,
-      "content": "lockdown means group call every night now. i've decided."
+      "content": "lockdown means group call every night now. i've decided.",
+      "id": "m37"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1584262860000,
       "type": "text",
       "is_unsent": false,
-      "content": "i have no say in this do i"
+      "content": "i have no say in this do i",
+      "id": "m38",
+      "reply_to_message_id": "m37"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1584262920000,
       "type": "text",
       "is_unsent": false,
-      "content": "correct"
+      "content": "correct",
+      "id": "m39",
+      "reply_to_message_id": "m38"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1590012000000,
       "type": "text",
       "is_unsent": false,
-      "content": "i tried to bake bread and the oven smoked out the whole house"
+      "content": "i tried to bake bread and the oven smoked out the whole house",
+      "id": "m40"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1590012060000,
       "type": "text",
       "is_unsent": false,
-      "content": "PLEASE tell me you filmed it"
+      "content": "PLEASE tell me you filmed it",
+      "id": "m41"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1590012120000,
       "type": "text",
       "is_unsent": false,
-      "content": "i wish i had. the smoke alarm woke up the neighbors"
+      "content": "i wish i had. the smoke alarm woke up the neighbors",
+      "id": "m42"
     },
     {
       "sender_name": "Bob",
@@ -129,105 +143,123 @@
           "act": "reacted",
           "reactor": "Dana"
         }
-      ]
+      ],
+      "id": "m43"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1598828700000,
       "type": "text",
       "is_unsent": false,
-      "content": "that's sick bro"
+      "content": "that's sick bro",
+      "id": "m44"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1598828760000,
       "type": "text",
       "is_unsent": false,
-      "content": "bro moment fr"
+      "content": "bro moment fr",
+      "id": "m45"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1601668800000,
       "type": "text",
       "is_unsent": false,
-      "content": "this traffic is absolute shit, ive been stuck an hour"
+      "content": "this traffic is absolute shit, ive been stuck an hour",
+      "id": "m46"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1601668860000,
       "type": "text",
       "is_unsent": false,
-      "content": "thats nothing, i once sat through a 3 hour jam, what the hell"
+      "content": "thats nothing, i once sat through a 3 hour jam, what the hell",
+      "id": "m47"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1601668920000,
       "type": "text",
       "is_unsent": false,
-      "content": "lol get out of there man"
+      "content": "lol get out of there man",
+      "id": "m48"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1601668980000,
       "type": "text",
       "is_unsent": false,
-      "content": "damn that's brutal"
+      "content": "damn that's brutal",
+      "id": "m49"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1613271600000,
       "type": "text",
       "is_unsent": false,
-      "content": "cant sleep, this game is too addictive"
+      "content": "cant sleep, this game is too addictive",
+      "id": "m50"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1613271660000,
       "type": "text",
       "is_unsent": false,
-      "content": "one more match. just one."
+      "content": "one more match. just one.",
+      "id": "m51"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1613271720000,
       "type": "text",
       "is_unsent": false,
-      "content": "ok that was 7 matches, dont judge me"
+      "content": "ok that was 7 matches, dont judge me",
+      "id": "m52"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1638306000000,
       "type": "text",
       "is_unsent": false,
-      "content": "guys I have news"
+      "content": "guys I have news",
+      "id": "m53"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1638306060000,
       "type": "text",
       "is_unsent": false,
-      "content": "you're pregnant"
+      "content": "you're pregnant",
+      "id": "m54",
+      "reply_to_message_id": "m53"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1638306120000,
       "type": "text",
       "is_unsent": false,
-      "content": "I'M PREGNANT??? no. im moving abroad for work."
+      "content": "I'M PREGNANT??? no. im moving abroad for work.",
+      "id": "m55",
+      "reply_to_message_id": "m54"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1638306180000,
       "type": "text",
       "is_unsent": false,
-      "content": "close enough"
+      "content": "close enough",
+      "id": "m56",
+      "reply_to_message_id": "m55"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1638306300000,
       "type": "text",
       "is_unsent": false,
-      "content": "oh this group chat is about to get very quiet"
+      "content": "oh this group chat is about to get very quiet",
+      "id": "m57"
     },
     {
       "sender_name": "Alice",
@@ -235,7 +267,7 @@
       "type": "share",
       "is_unsent": false,
       "share": {
-        "link": "https://scontent.example/photos/img_2.jpg",
+        "link": "https://github.com/vroslmend/chat-flashback",
         "share_text": ""
       },
       "photos": [
@@ -243,28 +275,32 @@
           "uri": "photos/img_2.jpg",
           "creation_timestamp": 1638307800000
         }
-      ]
+      ],
+      "id": "m58"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1652184000000,
       "type": "text",
       "is_unsent": false,
-      "content": "Dana's birthday party is gonna be legendary. Full send."
+      "content": "Dana's birthday party is gonna be legendary. Full send.",
+      "id": "m59"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1652184060000,
       "type": "text",
       "is_unsent": false,
-      "content": "nobody said full send"
+      "content": "nobody said full send",
+      "id": "m60"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1652184120000,
       "type": "text",
       "is_unsent": false,
-      "content": "i said it"
+      "content": "i said it",
+      "id": "m61"
     }
   ],
   "title": "Saturday Squad",

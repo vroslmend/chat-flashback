@@ -1,6 +1,6 @@
 # Saturday Squad flashback
 
-Generated 2026-08-04 11:08
+Generated 2026-08-04 12:21
 - **Period**: 2017-01-01 to 2026-01-01
 - **Total messages**: 94
 - **Members**: 4
@@ -137,23 +137,129 @@ Median time to reply, fastest first:
 - **Bob** (2023-09-01 14:01) - [ALL CAPS] "THE SQUAD IS BACK"
 - **Alice** (2017-06-15 19:01) - [ALL CAPS] "CONGRATS BROOOOO"
 
+## Links and domains
+
+| Domain | Shares |
+|---|---|
+| youtube.com | 2 |
+| github.com | 1 |
+| open.spotify.com | 1 |
+
+## Media leaderboard
+
+| Member | Photos | Stickers |
+|---|---|---|
+| Alice | 2 | 0 |
+| Charlie | 1 | 0 |
+| Dana | 1 | 0 |
+
+## Conversation starters
+
+A conversation is split on a 30-minute gap. The chat had **30** separate sessions.
+
+| Member | Sessions started |
+|---|---|
+| Alice | 9 |
+| Dana | 8 |
+| Bob | 7 |
+| Charlie | 6 |
+
+Longest single session: **7** messages (2025-08-09 01:00 - 01:06).
+
+## Reply chains
+
+**19** messages were part of a reply chain of 2+.
+
+1. **Bob**: close enough -> **Alice**: I'M PREGNANT??? no. im moving abroad for work. -> **Bob**: you're pregnant -> **Alice**: guys I have news
+
+2. **Charlie**: im in. dana you coming? -> **Bob**: happy new year! we actually meet this time pls -> **Alice**: Happy new year lads!!
+
+3. **Bob**: we're celebrating this weekend. no excuses -> **Alice**: CONGRATS BROOOOO -> **Charlie**: guys I got the job!!!
+
+4. **Dana**: it really does look like a helmet -> **Bob**: i can see this. i can see this -> **Alice**: does anyone else think Bob's new haircut looks like a helmet
+
+5. **Alice**: correct -> **Bob**: i have no say in this do i -> **Alice**: lockdown means group call every night now. i've decided.
+
+6. **Bob**: this is the real reunion -> **Charlie**: WE'RE GOING FIRST THING -> **Alice**: guys. The shawarma place. It's still there. I checked.
+
+## Ghosting stats
+
+Longest silence between a member's own messages, in days:
+
+| Member | Longest silence (days) |
+|---|---|
+| Charlie | 634 |
+| Dana | 541 |
+| Bob | 478 |
+| Alice | 423 |
+
+## Message length trends
+
+| Year | Avg chars | Longest |
+|---|---|---|
+| 2017 | 29.4 | 60 |
+| 2018 | 23.8 | 60 |
+| 2019 | 32.1 | 48 |
+| 2020 | 36.0 | 61 |
+| 2021 | 29.1 | 46 |
+| 2022 | 29.8 | 55 |
+| 2023 | 37.2 | 54 |
+| 2024 | 25.8 | 52 |
+| 2025 | 19.1 | 51 |
+| 2026 | 35.2 | 42 |
+
+## Sentiment (VADER)
+
+Scored **90** messages. English-only; may be noisy on mixed-language chat.
+
+| Member | Avg sentiment (-1 to +1) |
+|---|---|
+| Bob | +0.091 |
+| Alice | +0.084 |
+| Charlie | +0.076 |
+| Dana | +0.027 |
+
+## Extremes
+
+- Longest message: **Dana** (2020-05-21, 61 chars) "i tried to bake bread and the oven smoked out the whole house"
+- Most-reacted: **Dana** (2018-12-25, 3 reactions) "merry christmas everyone"
+- Record day: **2025-08-09** (7 messages)
+
 ## Charts
 
 ![activity_by_hour.png](activity_by_hour.png)
 
 ![activity_by_weekday.png](activity_by_weekday.png)
 
+![conversation_starters.png](conversation_starters.png)
+
+![ghosting.png](ghosting.png)
+
+![length_trends.png](length_trends.png)
+
+![media_leaderboard.png](media_leaderboard.png)
+
 ![messages_by_year.png](messages_by_year.png)
+
+![monthly_timeline.png](monthly_timeline.png)
 
 ![most_reacted.png](most_reacted.png)
 
 ![reactions_given.png](reactions_given.png)
 
+![reply_chains.png](reply_chains.png)
+
 ![response_speed.png](response_speed.png)
+
+![sentiment_over_time.png](sentiment_over_time.png)
+
+![sentiment_per_member.png](sentiment_per_member.png)
 
 ![swear_by_member.png](swear_by_member.png)
 
 ![swear_over_time.png](swear_over_time.png)
+
+![top_domains.png](top_domains.png)
 
 ![top_emojis.png](top_emojis.png)
 
@@ -162,5 +268,7 @@ Median time to reply, fastest first:
 ![top_words.png](top_words.png)
 
 ![tracked_terms.png](tracked_terms.png)
+
+![word_trends.png](word_trends.png)
 
 ![yearly_recap.png](yearly_recap.png)

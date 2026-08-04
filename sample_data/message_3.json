@@ -19,42 +19,48 @@
       "timestamp_ms": 1652184180000,
       "type": "text",
       "is_unsent": false,
-      "content": "bro you're setting up your own surprise party lmaooo"
+      "content": "bro you're setting up your own surprise party lmaooo",
+      "id": "m62"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1652184240000,
       "type": "text",
       "is_unsent": false,
-      "content": "shut up"
+      "content": "shut up",
+      "id": "m63"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1668165060000,
       "type": "text",
       "is_unsent": false,
-      "content": "it's 11:11, make a wish"
+      "content": "it's 11:11, make a wish",
+      "id": "m64"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1668165120000,
       "type": "text",
       "is_unsent": false,
-      "content": "wishing we all live in the same city again"
+      "content": "wishing we all live in the same city again",
+      "id": "m65"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1668165180000,
       "type": "text",
       "is_unsent": false,
-      "content": "ok that was unexpectedly deep"
+      "content": "ok that was unexpectedly deep",
+      "id": "m66"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1693558800000,
       "type": "text",
       "is_unsent": false,
-      "content": "reunion confirmed for December. Everyone is coming."
+      "content": "reunion confirmed for December. Everyone is coming.",
+      "id": "m67"
     },
     {
       "sender_name": "Bob",
@@ -78,35 +84,42 @@
           "act": "reacted",
           "reactor": "Dana"
         }
-      ]
+      ],
+      "id": "m68"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1703098800000,
       "type": "text",
       "is_unsent": false,
-      "content": "guys. The shawarma place. It's still there. I checked."
+      "content": "guys. The shawarma place. It's still there. I checked.",
+      "id": "m69"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1703098860000,
       "type": "text",
       "is_unsent": false,
-      "content": "WE'RE GOING FIRST THING"
+      "content": "WE'RE GOING FIRST THING",
+      "id": "m70",
+      "reply_to_message_id": "m69"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1703098920000,
       "type": "text",
       "is_unsent": false,
-      "content": "this is the real reunion"
+      "content": "this is the real reunion",
+      "id": "m71",
+      "reply_to_message_id": "m70"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1703098980000,
       "type": "text",
       "is_unsent": false,
-      "content": "ive thought about that shawarma every week for 4 years"
+      "content": "ive thought about that shawarma every week for 4 years",
+      "id": "m72"
     },
     {
       "sender_name": "Alice",
@@ -114,7 +127,7 @@
       "type": "share",
       "is_unsent": false,
       "share": {
-        "link": "https://scontent.example/photos/img_3.jpg",
+        "link": "https://open.spotify.com/track/1234567890",
         "share_text": ""
       },
       "photos": [
@@ -122,112 +135,128 @@
           "uri": "photos/img_3.jpg",
           "creation_timestamp": 1703102400000
         }
-      ]
+      ],
+      "id": "m73"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1707922800000,
       "type": "text",
       "is_unsent": false,
-      "content": "happy valentine's to the only people i love"
+      "content": "happy valentine's to the only people i love",
+      "id": "m74"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1707922860000,
       "type": "text",
       "is_unsent": false,
-      "content": "lol"
+      "content": "lol",
+      "id": "m75"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1707922920000,
       "type": "text",
       "is_unsent": false,
-      "content": "cringe"
+      "content": "cringe",
+      "id": "m76"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1707922980000,
       "type": "text",
       "is_unsent": false,
-      "content": "we love you too charlie"
+      "content": "we love you too charlie",
+      "id": "m77"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1721404800000,
       "type": "text",
       "is_unsent": false,
-      "content": "anyone seen the new movie? thinking of going tonight"
+      "content": "anyone seen the new movie? thinking of going tonight",
+      "id": "m78"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1721405100000,
       "type": "text",
       "is_unsent": false,
-      "content": "i saw it, it's mid"
+      "content": "i saw it, it's mid",
+      "id": "m79"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1721405160000,
       "type": "text",
       "is_unsent": false,
-      "content": "she said mid, im not going"
+      "content": "she said mid, im not going",
+      "id": "m80"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1721405220000,
       "type": "text",
       "is_unsent": false,
-      "content": "this group has become untrustworthy"
+      "content": "this group has become untrustworthy",
+      "id": "m81"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1754683200000,
       "type": "text",
       "is_unsent": false,
-      "content": "the trip is happening. Book your flights this week."
+      "content": "the trip is happening. Book your flights this week.",
+      "id": "m82"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1754683260000,
       "type": "text",
       "is_unsent": false,
-      "content": "already booked 😎"
+      "content": "already booked 😎",
+      "id": "m83"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1754683320000,
       "type": "text",
       "is_unsent": false,
-      "content": "already booked"
+      "content": "already booked",
+      "id": "m84"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1754683380000,
       "type": "text",
       "is_unsent": false,
-      "content": "im waiting for payday, DON'T judge me"
+      "content": "im waiting for payday, DON'T judge me",
+      "id": "m85"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1754683440000,
       "type": "text",
       "is_unsent": false,
-      "content": "bro..."
+      "content": "bro...",
+      "id": "m86"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1754683500000,
       "type": "text",
       "is_unsent": false,
-      "content": "bro..."
+      "content": "bro...",
+      "id": "m87"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1754683560000,
       "type": "text",
       "is_unsent": false,
-      "content": "BRO."
+      "content": "BRO.",
+      "id": "m88"
     },
     {
       "sender_name": "Dana",
@@ -235,7 +264,7 @@
       "type": "share",
       "is_unsent": false,
       "share": {
-        "link": "https://scontent.example/photos/img_4.jpg",
+        "link": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
         "share_text": ""
       },
       "photos": [
@@ -243,14 +272,16 @@
           "uri": "photos/img_4.jpg",
           "creation_timestamp": 1756749600000
         }
-      ]
+      ],
+      "id": "m89"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1767225600000,
       "type": "text",
       "is_unsent": false,
-      "content": "TEN YEARS OF THIS CHAT. I can't believe it"
+      "content": "TEN YEARS OF THIS CHAT. I can't believe it",
+      "id": "m90"
     },
     {
       "sender_name": "Bob",
@@ -274,14 +305,16 @@
           "act": "reacted",
           "reactor": "Dana"
         }
-      ]
+      ],
+      "id": "m91"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1767225780000,
       "type": "text",
       "is_unsent": false,
-      "content": "here's to many more. let's go!!!"
+      "content": "here's to many more. let's go!!!",
+      "id": "m92"
     }
   ],
   "title": "Saturday Squad",

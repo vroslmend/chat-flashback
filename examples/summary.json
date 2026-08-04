@@ -1,0 +1,592 @@
+{
+  "title": "Saturday Squad",
+  "generated": "2026-08-04 12:21",
+  "anonymized": false,
+  "period": {
+    "start": "2017-01-01",
+    "end": "2026-01-01"
+  },
+  "total_messages": 94,
+  "members": 4,
+  "longest_streak_days": 1,
+  "media": {
+    "Alice": {
+      "photos": 2,
+      "stickers": 0
+    },
+    "Charlie": {
+      "photos": 1,
+      "stickers": 0
+    },
+    "Dana": {
+      "photos": 1,
+      "stickers": 0
+    }
+  },
+  "calls": 0,
+  "leaderboard": [
+    {
+      "member": "Alice",
+      "messages": 26
+    },
+    {
+      "member": "Bob",
+      "messages": 26
+    },
+    {
+      "member": "Dana",
+      "messages": 22
+    },
+    {
+      "member": "Charlie",
+      "messages": 20
+    }
+  ],
+  "yearly": {
+    "2017": {
+      "total": 14,
+      "active_members": 4,
+      "top_member": "Alice",
+      "top_word": {
+        "word": "happy",
+        "count": 2
+      },
+      "top_emoji": null,
+      "record_day": "2017-01-01",
+      "record_day_count": 4,
+      "best_reacted": {
+        "sender": "Alice",
+        "ts": "2017-01-01 17:00",
+        "content": "Happy new year lads!!",
+        "mtype": "text",
+        "reactions": 2
+      }
+    },
+    "2018": {
+      "total": 12,
+      "active_members": 4,
+      "top_member": "Bob",
+      "top_word": {
+        "word": "morning",
+        "count": 2
+      },
+      "top_emoji": null,
+      "record_day": "2018-06-01",
+      "record_day_count": 4,
+      "best_reacted": {
+        "sender": "Dana",
+        "ts": "2018-12-25 23:00",
+        "content": "merry christmas everyone",
+        "mtype": "text",
+        "reactions": 3
+      }
+    },
+    "2019": {
+      "total": 11,
+      "active_members": 4,
+      "top_member": "Alice",
+      "top_word": {
+        "word": "shawarma",
+        "count": 3
+      },
+      "top_emoji": null,
+      "record_day": "2019-10-06",
+      "record_day_count": 5,
+      "best_reacted": {
+        "sender": "Dana",
+        "ts": "2019-07-04 07:00",
+        "content": "why is nobody awake",
+        "mtype": "text",
+        "reactions": 1
+      }
+    },
+    "2020": {
+      "total": 13,
+      "active_members": 4,
+      "top_member": "Alice",
+      "top_word": {
+        "word": "out",
+        "count": 2
+      },
+      "top_emoji": null,
+      "record_day": "2020-10-03",
+      "record_day_count": 4,
+      "best_reacted": {
+        "sender": "Bob",
+        "ts": "2020-08-31 04:00",
+        "content": "started my own thing, gonna be a whole business by 2021",
+        "mtype": "text",
+        "reactions": 3
+      }
+    },
+    "2021": {
+      "total": 9,
+      "active_members": 4,
+      "top_member": "Charlie",
+      "top_word": {
+        "word": "pregnant",
+        "count": 2
+      },
+      "top_emoji": null,
+      "record_day": "2021-12-01",
+      "record_day_count": 6,
+      "best_reacted": null
+    },
+    "2022": {
+      "total": 8,
+      "active_members": 4,
+      "top_member": "Bob",
+      "top_word": {
+        "word": "party",
+        "count": 2
+      },
+      "top_emoji": null,
+      "record_day": "2022-05-10",
+      "record_day_count": 5,
+      "best_reacted": null
+    },
+    "2023": {
+      "total": 7,
+      "active_members": 4,
+      "top_member": "Dana",
+      "top_word": {
+        "word": "reunion",
+        "count": 2
+      },
+      "top_emoji": null,
+      "record_day": "2023-12-21",
+      "record_day_count": 5,
+      "best_reacted": {
+        "sender": "Bob",
+        "ts": "2023-09-01 14:01",
+        "content": "THE SQUAD IS BACK",
+        "mtype": "text",
+        "reactions": 3
+      }
+    },
+    "2024": {
+      "total": 8,
+      "active_members": 4,
+      "top_member": "Bob",
+      "top_word": {
+        "word": "love",
+        "count": 2
+      },
+      "top_emoji": null,
+      "record_day": "2024-02-14",
+      "record_day_count": 4,
+      "best_reacted": null
+    },
+    "2025": {
+      "total": 8,
+      "active_members": 4,
+      "top_member": "Dana",
+      "top_word": {
+        "word": "bro",
+        "count": 3
+      },
+      "top_emoji": {
+        "emoji": "😎",
+        "count": 1
+      },
+      "record_day": "2025-08-09",
+      "record_day_count": 7,
+      "best_reacted": null
+    },
+    "2026": {
+      "total": 4,
+      "active_members": 4,
+      "top_member": "Alice",
+      "top_word": {
+        "word": "ten",
+        "count": 2
+      },
+      "top_emoji": null,
+      "record_day": "2026-01-01",
+      "record_day_count": 4,
+      "best_reacted": {
+        "sender": "Bob",
+        "ts": "2026-01-01 05:01",
+        "content": "best ten years of my life",
+        "mtype": "text",
+        "reactions": 3
+      }
+    }
+  },
+  "personality": {
+    "Alice": {
+      "messages": 26,
+      "avg_words": 4.85,
+      "peak_hour": 2,
+      "night_pct": 46.2,
+      "signature_word": "guys",
+      "top_emojis": [
+        "😎"
+      ]
+    },
+    "Bob": {
+      "messages": 26,
+      "avg_words": 5.31,
+      "peak_hour": 17,
+      "night_pct": 46.2,
+      "signature_word": "life",
+      "top_emojis": []
+    },
+    "Charlie": {
+      "messages": 20,
+      "avg_words": 4.95,
+      "peak_hour": 1,
+      "night_pct": 40.0,
+      "signature_word": "said",
+      "top_emojis": []
+    },
+    "Dana": {
+      "messages": 22,
+      "avg_words": 6.64,
+      "peak_hour": 1,
+      "night_pct": 45.5,
+      "signature_word": "week",
+      "top_emojis": []
+    }
+  },
+  "reactions": {
+    "total": 18,
+    "reacted_messages": 8,
+    "most_reactive": "Charlie",
+    "reactors": [
+      {
+        "member": "Charlie",
+        "count": 6
+      },
+      {
+        "member": "Alice",
+        "count": 6
+      },
+      {
+        "member": "Bob",
+        "count": 3
+      },
+      {
+        "member": "Dana",
+        "count": 3
+      }
+    ],
+    "emoji_breakdown": [
+      {
+        "emoji": "ð",
+        "count": 10
+      },
+      {
+        "emoji": "❤️",
+        "count": 6
+      },
+      {
+        "emoji": "ð¤£",
+        "count": 2
+      }
+    ]
+  },
+  "response_speed": [
+    {
+      "member": "Bob",
+      "replies": 18,
+      "median_seconds": 60.0,
+      "fast5_pct": 94.4,
+      "ghost_pct": 23.1
+    },
+    {
+      "member": "Charlie",
+      "replies": 12,
+      "median_seconds": 60.0,
+      "fast5_pct": 100.0,
+      "ghost_pct": 25.0
+    },
+    {
+      "member": "Dana",
+      "replies": 14,
+      "median_seconds": 60.0,
+      "fast5_pct": 92.9,
+      "ghost_pct": 31.8
+    },
+    {
+      "member": "Alice",
+      "replies": 18,
+      "median_seconds": 60.0,
+      "fast5_pct": 83.3,
+      "ghost_pct": 26.9
+    }
+  ],
+  "swear_words": {
+    "total_hits": 3,
+    "per_member": [
+      {
+        "member": "Bob",
+        "count": 1
+      },
+      {
+        "member": "Dana",
+        "count": 1
+      },
+      {
+        "member": "Alice",
+        "count": 1
+      }
+    ]
+  },
+  "weirdest_statements": [
+    {
+      "member": "Charlie",
+      "ts": "2023-12-21 00:01",
+      "score": 3,
+      "reasons": [
+        "ALL CAPS",
+        "sent after midnight"
+      ],
+      "snippet": "WE'RE GOING FIRST THING"
+    },
+    {
+      "member": "Alice",
+      "ts": "2021-12-01 02:02",
+      "score": 2,
+      "reasons": [
+        "punctuation spiral",
+        "sent after midnight"
+      ],
+      "snippet": "I'M PREGNANT??? no. im moving abroad for work."
+    },
+    {
+      "member": "Alice",
+      "ts": "2017-01-15 14:45",
+      "score": 2,
+      "reasons": [
+        "ALL CAPS"
+      ],
+      "snippet": "THE USUAL SPOT GOT SHUT DOWN LAST WEEK"
+    },
+    {
+      "member": "Charlie",
+      "ts": "2026-01-01 05:03",
+      "score": 2,
+      "reasons": [
+        "punctuation spiral",
+        "sent after midnight"
+      ],
+      "snippet": "here's to many more. let's go!!!"
+    },
+    {
+      "member": "Bob",
+      "ts": "2023-09-01 14:01",
+      "score": 2,
+      "reasons": [
+        "ALL CAPS"
+      ],
+      "snippet": "THE SQUAD IS BACK"
+    },
+    {
+      "member": "Alice",
+      "ts": "2017-06-15 19:01",
+      "score": 2,
+      "reasons": [
+        "ALL CAPS"
+      ],
+      "snippet": "CONGRATS BROOOOO"
+    }
+  ],
+  "links": {
+    "top_domains": [
+      {
+        "domain": "youtube.com",
+        "count": 2
+      },
+      {
+        "domain": "github.com",
+        "count": 1
+      },
+      {
+        "domain": "open.spotify.com",
+        "count": 1
+      }
+    ],
+    "top_links": [
+      {
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "count": 2
+      },
+      {
+        "url": "https://github.com/vroslmend/chat-flashback",
+        "count": 1
+      },
+      {
+        "url": "https://open.spotify.com/track/1234567890",
+        "count": 1
+      }
+    ]
+  },
+  "conversations": {
+    "count": 30,
+    "longest_run_msgs": 7,
+    "starters": [
+      {
+        "member": "Alice",
+        "count": 9
+      },
+      {
+        "member": "Dana",
+        "count": 8
+      },
+      {
+        "member": "Bob",
+        "count": 7
+      },
+      {
+        "member": "Charlie",
+        "count": 6
+      }
+    ]
+  },
+  "reply_chains": {
+    "count": 19,
+    "longest": [
+      4,
+      3,
+      3,
+      3,
+      3,
+      3
+    ]
+  },
+  "ghosting_days": {
+    "Alice": 423,
+    "Bob": 478,
+    "Charlie": 634,
+    "Dana": 541
+  },
+  "length_trends": {
+    "2017": {
+      "n": 14,
+      "avg_chars": 29.4,
+      "max_chars": 60
+    },
+    "2018": {
+      "n": 12,
+      "avg_chars": 23.8,
+      "max_chars": 60
+    },
+    "2019": {
+      "n": 10,
+      "avg_chars": 32.1,
+      "max_chars": 48
+    },
+    "2020": {
+      "n": 13,
+      "avg_chars": 36.0,
+      "max_chars": 61
+    },
+    "2021": {
+      "n": 8,
+      "avg_chars": 29.1,
+      "max_chars": 46
+    },
+    "2022": {
+      "n": 8,
+      "avg_chars": 29.8,
+      "max_chars": 55
+    },
+    "2023": {
+      "n": 6,
+      "avg_chars": 37.2,
+      "max_chars": 54
+    },
+    "2024": {
+      "n": 8,
+      "avg_chars": 25.8,
+      "max_chars": 52
+    },
+    "2025": {
+      "n": 7,
+      "avg_chars": 19.1,
+      "max_chars": 51
+    },
+    "2026": {
+      "n": 4,
+      "avg_chars": 35.2,
+      "max_chars": 42
+    }
+  },
+  "sentiment": {
+    "scored": 90,
+    "per_member": {
+      "Alice": 0.084,
+      "Bob": 0.091,
+      "Charlie": 0.076,
+      "Dana": 0.027
+    },
+    "per_year": {
+      "2017": 0.134,
+      "2018": 0.085,
+      "2019": 0.029,
+      "2020": -0.153,
+      "2021": 0.037,
+      "2022": 0.239,
+      "2023": 0.0,
+      "2024": 0.237,
+      "2025": 0.066,
+      "2026": 0.159
+    }
+  },
+  "extremes": {
+    "longest": {
+      "sender": "Dana",
+      "ts": "2020-05-21 03:00",
+      "content": "i tried to bake bread and the oven smoked out the whole house",
+      "mtype": "text",
+      "reactions": 0
+    },
+    "shortest": {
+      "sender": "Alice",
+      "ts": "2018-03-20 15:31",
+      "content": "rip",
+      "mtype": "text",
+      "reactions": 0
+    },
+    "most_reacted": {
+      "sender": "Dana",
+      "ts": "2018-12-25 23:00",
+      "content": "merry christmas everyone",
+      "mtype": "text",
+      "reactions": 3
+    },
+    "record_day": "2025-08-09",
+    "record_day_count": 7
+  },
+  "tracked_terms": {
+    "shawarma": {
+      "count": 5,
+      "per_member": {
+        "Dana": 2,
+        "Alice": 2,
+        "Charlie": 1
+      },
+      "by_year": {
+        "2019": 3,
+        "2023": 2
+      }
+    },
+    "bro": {
+      "count": 8,
+      "per_member": {
+        "Alice": 5,
+        "Charlie": 1,
+        "Bob": 1,
+        "Dana": 1
+      },
+      "by_year": {
+        "2017": 1,
+        "2020": 2,
+        "2021": 1,
+        "2022": 1,
+        "2025": 3
+      }
+    }
+  }
+}

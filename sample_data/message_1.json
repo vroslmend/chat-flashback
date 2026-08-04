@@ -31,98 +31,116 @@
           "act": "reacted",
           "reactor": "Charlie"
         }
-      ]
+      ],
+      "id": "m0"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1483272300000,
       "type": "text",
       "is_unsent": false,
-      "content": "happy new year! we actually meet this time pls"
+      "content": "happy new year! we actually meet this time pls",
+      "id": "m1",
+      "reply_to_message_id": "m0"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1483272600000,
       "type": "text",
       "is_unsent": false,
-      "content": "im in. dana you coming?"
+      "content": "im in. dana you coming?",
+      "id": "m2",
+      "reply_to_message_id": "m1"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1483275600000,
       "type": "text",
       "is_unsent": false,
-      "content": "obv. when and where"
+      "content": "obv. when and where",
+      "id": "m3"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1484472600000,
       "type": "text",
       "is_unsent": false,
-      "content": "saturday 6pm usual spot. dont be late"
+      "content": "saturday 6pm usual spot. dont be late",
+      "id": "m4"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1484473500000,
       "type": "text",
       "is_unsent": false,
-      "content": "THE USUAL SPOT GOT SHUT DOWN LAST WEEK"
+      "content": "THE USUAL SPOT GOT SHUT DOWN LAST WEEK",
+      "id": "m5"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1484473560000,
       "type": "text",
       "is_unsent": false,
-      "content": "??????"
+      "content": "??????",
+      "id": "m6"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1484473800000,
       "type": "text",
       "is_unsent": false,
-      "content": "lol that's so on brand for us"
+      "content": "lol that's so on brand for us",
+      "id": "m7"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1486749600000,
       "type": "text",
       "is_unsent": false,
-      "content": "whos up for games night?"
+      "content": "whos up for games night?",
+      "id": "m8"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1486751400000,
       "type": "text",
       "is_unsent": false,
-      "content": "me but i lose at everything so"
+      "content": "me but i lose at everything so",
+      "id": "m9"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1497535200000,
       "type": "text",
       "is_unsent": false,
-      "content": "guys I got the job!!!"
+      "content": "guys I got the job!!!",
+      "id": "m10"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1497535260000,
       "type": "text",
       "is_unsent": false,
-      "content": "CONGRATS BROOOOO"
+      "content": "CONGRATS BROOOOO",
+      "id": "m11",
+      "reply_to_message_id": "m10"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1497535320000,
       "type": "text",
       "is_unsent": false,
-      "content": "we're celebrating this weekend. no excuses"
+      "content": "we're celebrating this weekend. no excuses",
+      "id": "m12",
+      "reply_to_message_id": "m11"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1497535500000,
       "type": "text",
       "is_unsent": false,
-      "content": "told u the interview was fine, u were stressing over nothing"
+      "content": "told u the interview was fine, u were stressing over nothing",
+      "id": "m13"
     },
     {
       "sender_name": "Bob",
@@ -136,7 +154,8 @@
           "act": "reacted",
           "reactor": "Alice"
         }
-      ]
+      ],
+      "id": "m14"
     },
     {
       "sender_name": "Dana",
@@ -155,70 +174,82 @@
           "act": "reacted",
           "reactor": "Bob"
         }
-      ]
+      ],
+      "id": "m15"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1521541860000,
       "type": "text",
       "is_unsent": false,
-      "content": "rip"
+      "content": "rip",
+      "id": "m16"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1527840000000,
       "type": "text",
       "is_unsent": false,
-      "content": "morning crew"
+      "content": "morning crew",
+      "id": "m17"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1527840000000,
       "type": "text",
       "is_unsent": false,
-      "content": "morning"
+      "content": "morning",
+      "id": "m18"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1527840060000,
       "type": "text",
       "is_unsent": false,
-      "content": "ive been up since 5. couldnt sleep"
+      "content": "ive been up since 5. couldnt sleep",
+      "id": "m19"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1527840120000,
       "type": "text",
       "is_unsent": false,
-      "content": "go to bed nerd"
+      "content": "go to bed nerd",
+      "id": "m20"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1536526800000,
       "type": "text",
       "is_unsent": false,
-      "content": "does anyone else think Bob's new haircut looks like a helmet"
+      "content": "does anyone else think Bob's new haircut looks like a helmet",
+      "id": "m21"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1536526860000,
       "type": "text",
       "is_unsent": false,
-      "content": "i can see this. i can see this"
+      "content": "i can see this. i can see this",
+      "id": "m22",
+      "reply_to_message_id": "m21"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1536526920000,
       "type": "text",
       "is_unsent": false,
-      "content": "it really does look like a helmet"
+      "content": "it really does look like a helmet",
+      "id": "m23",
+      "reply_to_message_id": "m22"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1536526980000,
       "type": "text",
       "is_unsent": false,
-      "content": "ok wow. okay"
+      "content": "ok wow. okay",
+      "id": "m24"
     },
     {
       "sender_name": "Dana",
@@ -242,28 +273,32 @@
           "act": "reacted",
           "reactor": "Charlie"
         }
-      ]
+      ],
+      "id": "m25"
     },
     {
       "sender_name": "Alice",
       "timestamp_ms": 1555081200000,
       "type": "text",
       "is_unsent": false,
-      "content": "wedding trip booked!! 3 months!!!"
+      "content": "wedding trip booked!! 3 months!!!",
+      "id": "m26"
     },
     {
       "sender_name": "Bob",
       "timestamp_ms": 1555081260000,
       "type": "text",
       "is_unsent": false,
-      "content": "cant believe charlie's marrying into money"
+      "content": "cant believe charlie's marrying into money",
+      "id": "m27"
     },
     {
       "sender_name": "Charlie",
       "timestamp_ms": 1555081320000,
       "type": "text",
       "is_unsent": false,
-      "content": "im right here you absolute donkey"
+      "content": "im right here you absolute donkey",
+      "id": "m28"
     },
     {
       "sender_name": "Dana",
@@ -277,14 +312,16 @@
           "act": "reacted",
           "reactor": "Alice"
         }
-      ]
+      ],
+      "id": "m29"
     },
     {
       "sender_name": "Dana",
       "timestamp_ms": 1562205660000,
       "type": "text",
       "is_unsent": false,
-      "content": "SERIOUSLY"
+      "content": "SERIOUSLY",
+      "id": "m30"
     }
   ],
   "title": "Saturday Squad",
