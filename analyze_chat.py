@@ -500,6 +500,17 @@ def write_charts(msgs, stats, analyses, out_dir, track):
         ax.set_title("Messages by hour of day", fontweight="bold")
         save(fig, "activity_by_hour.png")
 
+    # activity by weekday
+    weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    vals = [stats["by_weekday"].get(d, 0) for d in range(7)]
+    with plt.rc_context(theme):
+        fig, ax = plt.subplots(figsize=(9, 3.5))
+        ax.bar(range(7), vals, color=PALETTE[2])
+        ax.set_xticks(range(7))
+        ax.set_xticklabels(weekdays)
+        ax.set_title("Messages by weekday", fontweight="bold")
+        save(fig, "activity_by_weekday.png")
+
     # top members
     top_members = stats["member_msgs"].most_common(10)
     with plt.rc_context(theme):
@@ -619,7 +630,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
     lines.append(f"- **Period**: {dates[0]} to {dates[-1]}")
     lines.append(f"- **Total messages**: {stats['total']:,}")
     lines.append(f"- **Members**: {len(stats['member_msgs'])}")
-    lines.append(f"- **Longest daily streak**: {stats['longest_streak']} days")
+    lines.append(f"- **Longest daily streak**: {stats['longest_streak']} day{'s' if stats['longest_streak'] != 1 else ''}")
     lines.append(f"- **Media (photos/stickers)**: {stats['media']}")
     lines.append(f"- **Links shared**: {stats['links']}")
     lines.append(f"- **Calls**: {stats['calls']} ({int(stats['call_seconds'] // 60)} min)")

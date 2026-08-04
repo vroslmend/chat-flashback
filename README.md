@@ -70,6 +70,14 @@ A thread folder contains `message_1.json`, `message_2.json`, ... that you can po
 python analyze_chat.py --input sample_data --track "shawarma, bro"
 ```
 
+## Examples
+
+Sample output from the synthetic thread is in `examples/`:
+
+- `example_summary.md` - a full generated report
+- PNG charts: messages per year, activity by hour/weekday, top members, top words,
+  yearly recap, reaction dynamics, response speed, swear stats, tracked terms
+
 ## License
 
 MIT
