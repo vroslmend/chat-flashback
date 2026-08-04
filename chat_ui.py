@@ -51,9 +51,16 @@ class ThreadIndex:
             "ts": m["ts_ms"], "sender": m["sender"], "color": self.colors[m["sender"]],
             "content": m["content"], "mtype": m["mtype"],
             "reactions": [{"actor": a, "reaction": r} for a, r in m["reactions"]],
-            "has_photo": m["has_photo"], "photo_uris": m["photo_uris"],
-            "has_sticker": m["has_sticker"], "link": m["link"],
-            "is_unsent": m["is_unsent"], "reply_to": None, "sentiment": None,
+            "has_photo": m.get("has_photo", False), "photo_uris": m.get("photo_uris", []),
+            "has_sticker": m.get("has_sticker", False),
+            "has_gif": m.get("has_gif", False), "gif_uris": m.get("gif_uris", []),
+            "has_video": m.get("has_video", False), "video_uris": m.get("video_uris", []),
+            "has_audio": m.get("has_audio", False), "audio_uris": m.get("audio_uris", []),
+            "has_file": m.get("has_file", False), "file_uris": m.get("file_uris", []),
+            "file_names": m.get("file_names", []),
+            "is_taken_down": m.get("is_taken_down", False),
+            "link": m.get("link"),
+            "is_unsent": m.get("is_unsent", False), "reply_to": None, "sentiment": None,
         }
         rid = m.get("reply_to")
         if rid is not None and rid in self.by_id:
@@ -239,6 +246,16 @@ def make_handler(threads, output_dir):
                     if report.is_file():
                         return self._send(200, report.read_bytes(), "text/html; charset=utf-8")
                     return self._send(404, "no report yet")
+                if sub[0] == "year_in_review.html":
+                    index = output_dir / slug / "year_in_review.html"
+                    if index.is_file():
+                        return self._send(200, index.read_bytes(), "text/html; charset=utf-8")
+                    return self._send(404, "no year review yet")
+                if sub[0] == "year" and len(sub) >= 2:
+                    page = output_dir / slug / f"year_{sub[1]}.html"
+                    if page.is_file():
+                        return self._send(200, page.read_bytes(), "text/html; charset=utf-8")
+                    return self._send(404, "no such year")
                 if sub[0] == "media":
                     rel = "/".join(sub[1:])
                     media = thread.resolve_media(rel)
@@ -331,6 +348,9 @@ main{max-width:760px;margin:0 auto;padding:0 16px 120px}
 .unsent{text-decoration:line-through;opacity:.6}
 .media{margin:6px 0}
 .media img{max-width:220px;max-height:220px;border-radius:10px;border:1px solid var(--border);display:block}
+.media video{max-width:280px;max-height:220px;border-radius:10px;border:1px solid var(--border);display:block}
+.media audio{width:280px;max-width:100%}
+.media a{color:#5b8ff9;word-break:break-all;font-size:13px}
 .reactions{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
 .ra{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:1px 8px;font-size:12px}
 .link{font-size:12px;color:#5b8ff9}
@@ -356,6 +376,7 @@ main{max-width:760px;margin:0 auto;padding:0 16px 120px}
 <button id="theme" title="Toggle theme" aria-label="Toggle theme">Light</button>
 <span class="count" id="count"></span>
 <a href="report.html" style="color:#5b8ff9;font-size:13px">Report</a>
+<a href="year_in_review.html" style="color:#5b8ff9;font-size:13px">Years</a>
 </div>
 <main id="feed"></main>
 <div class="loader" id="loader">Loading...</div>
@@ -381,10 +402,16 @@ function sentBg(s){if(s==null)return '';if(s>0.15)return ' sent-pos';if(s<-0.15)
 function mediaHTML(m){
 var out='';
 if(m.photo_uris&&m.photo_uris.length){m.photo_uris.slice(0,3).forEach(function(u){out+='<div class="media"><img loading="lazy" src="/t/'+SLUG+'/media/'+esc(u)+'" alt=""/></div>';});}
+if(m.has_gif&&m.gif_uris.length){m.gif_uris.slice(0,2).forEach(function(u){out+='<div class="media"><img loading="lazy" src="/t/'+SLUG+'/media/'+esc(u)+'" alt=""/></div>';});}
+if(m.has_video&&m.video_uris.length){m.video_uris.slice(0,2).forEach(function(u){out+='<div class="media"><video controls preload="metadata" src="/t/'+SLUG+'/media/'+esc(u)+'"></video></div>';});}
+if(m.has_audio&&m.audio_uris.length){m.audio_uris.slice(0,2).forEach(function(u){out+='<div class="media"><audio controls preload="metadata" src="/t/'+SLUG+'/media/'+esc(u)+'"></audio></div>';});}
+if(m.has_file&&m.file_uris.length){m.file_uris.slice(0,3).forEach(function(u){out+='<div class="media"><a href="/t/'+SLUG+'/media/'+esc(u)+'" target="_blank">'+esc(u.split('/').pop())+'</a></div>';});}
+if(m.has_file&&!m.file_uris.length){m.file_names.slice(0,3).forEach(function(n){out+='<div class="media">[file: '+esc(n)+']</div>';});}
 if(m.has_sticker)out+='<div class="media sticker">[sticker]</div>';
 if(m.link)out+='<div class="link"><a href="'+esc(m.link)+'" target="_blank" rel="noopener noreferrer">'+esc(m.link)+'</a></div>';
 if(m.mtype==='Call')out+='<div class="call">[call]</div>';
 if(m.is_unsent)out+='<span class="unsent">(unsent)</span>';
+if(m.is_taken_down)out+='<span class="unsent">(removed)</span>';
 return out;}
 function msgHTML(m){
 var ya=yearsAgo(m.ts);

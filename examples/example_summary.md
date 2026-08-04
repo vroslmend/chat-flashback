@@ -1,11 +1,11 @@
 # Saturday Squad flashback
 
-Generated 2026-08-04 14:14
+Generated 2026-08-04 15:42
 - **Period**: 2017-01-01 to 2026-01-01
 - **Total messages**: 94
 - **Members**: 4
 - **Longest daily streak**: 1 day
-- **Media (photos/stickers)**: 4
+- **Media (photos, stickers, GIFs, videos, audio, files)**: 4
 - **Links shared**: 4
 - **Calls**: 0 (0 min)
 
@@ -147,11 +147,11 @@ Median time to reply, fastest first:
 
 ## Media leaderboard
 
-| Member | Photos | Stickers |
-|---|---|---|
-| Alice | 2 | 0 |
-| Dana | 1 | 0 |
-| Charlie | 1 | 0 |
+| Member | Photos | Stickers | GIFs | Videos | Audio | Files |
+|---|---|---|---|---|---|---|
+| Alice | 2 | 0 | 0 | 0 | 0 | 0 |
+| Charlie | 1 | 0 | 0 | 0 | 0 | 0 |
+| Dana | 1 | 0 | 0 | 0 | 0 | 0 |
 
 ## Conversation starters
 
@@ -230,7 +230,7 @@ Scored **90** messages. English-only; may be noisy on mixed-language chat.
 - **27** distinct active days.
 - Busiest day: **7** messages.
 - Average **3.5** messages per active day.
-- Peak media year: **2019** (1 photos/stickers).
+- Peak media year: **2019** (1 photos/stickers/GIFs/videos).
 
 ## Pair dynamics
 

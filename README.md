@@ -28,9 +28,15 @@ Runs locally. Your data is not uploaded anywhere.
 - Question dynamics. Who asks questions, who answers, who gets left on read, answer speed.
 - What the chat was about. TF-IDF topic words per year.
 - Running jokes. Repeated phrases that look like inside jokes (frequency, members, years).
+- Year in review. A page per year (monthly activity, top words/emojis, jokes) plus an index.
 - Message-length and word trends over time.
 - Sentiment (VADER). Average mood per member and per year.
 - Weirdest statements. All-caps, 3am, punctuation-spiral, and extreme-length messages.
+- Media leaderboard. Photos, stickers, GIFs, videos, audio, and file attachments per member.
+- Handles newer-format export fields: `gifs`, `videos`, `audio_files`, `files`, `polls`,
+  and `is_taken_down`, and de-duplicates messages that appear in multiple files.
+- `--check`. Validate an export before analyzing: unknown message types/keys, empty
+  messages, media files missing on disk, duplicate messages, and gaps between files.
 - Self-contained `report.html` with all charts embedded (share one file). Sticky nav,
   dark/light toggle, and filterable, sortable tables.
 - Local chat reader (`--serve`). Browse the chat in a Messenger-style web UI, with
@@ -85,8 +91,10 @@ Options:
 | `--config` | JSON config file with any of the options above |
 | `--progress` | Show phase progress while analyzing |
 | `--incremental` | Skip threads that are unchanged since the last run |
+| `--check` | Validate the export instead of analyzing (always exits 0) |
 
-Writes `summary.md`, `report.html`, and PNG charts into `output/<thread>/`.
+Writes `summary.md`, `report.html`, PNG charts, and `year_<year>.html` year-in-review
+pages into `output/<thread>/`.
 
 ### Config file
 
@@ -113,6 +121,21 @@ python analyze_chat.py --config config.json
 `output/.chatflashback_state.json` and skips threads that have not changed since the
 last run. Changing flags like `--year` or `--top` forces a re-run.
 
+### Validating an export
+
+Before analyzing a fresh download, run `--check` to surface anything the tool may not
+handle yet and to find broken attachments:
+
+```bash
+python analyze_chat.py --input data --check
+```
+
+It reports, per thread: message types, unknown `type` values and unknown top-level
+message keys (so new export formats are easy to spot), empty messages, media
+attachments that are missing on disk, duplicate messages (it de-duplicates them
+automatically when analyzing), and gaps over 90 days between message files. Add
+`--json` to also write `check.json`. `--check` always exits 0 and never analyzes.
+
 ## Chat reader
 
 ```bash
@@ -124,12 +147,13 @@ opens a Messenger-style reader:
 
 - Infinite-scroll feed grouped by day, newest or oldest first
 - Sender color chips, inline reactions, media thumbnails, shares and call messages
+- Photo/GIF thumbnails, inline video and audio players, and download links for files
 - Reply threading, "N years ago" badges, subtle sentiment tint
 - Full-text search (with a `.*` regex toggle) and per-member filters
 - A jump-to-date control, an "On this day" view across the years, and a random-memory
   "Surprise me" button
 - A light/dark theme toggle (remembered between visits)
-- A link to the full report
+- Links to the full report and the year-in-review pages
 
 Media files are served from the export folder only; paths are resolved inside the
 thread directory so nothing outside it can be read. Search is a simple substring
@@ -177,12 +201,13 @@ Sample output from the synthetic thread is in `examples/`:
 - `example_summary.md` - a full generated report
 - `report.html` - the same report as a single self-contained HTML file
 - `summary.json` - the report data as structured JSON
+- `year_in_review.html` and `year_<year>.html` - one page per year
 - PNG charts: messages per year, activity heatmap, pace trends, activity by
   hour/weekday, top members, top words, word clouds, emoji timeline, yearly recap,
   pair dynamics, hourly radar, reaction dynamics, question dynamics, topics per
-  year, running jokes, response speed, swear stats, tracked terms, domains, media,
-  reply chains, ghosting, monologues, conversation starters, monthly timeline,
-  word trends, and sentiment
+  year, running jokes, response speed, swear stats, tracked terms, domains, media
+  leaderboard, reply chains, ghosting, monologues, conversation starters, monthly
+  timeline, word trends, and sentiment
 
 ![Activity heatmap](examples/activity_heatmap.png)
 

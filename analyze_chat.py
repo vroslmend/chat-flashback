@@ -8,6 +8,7 @@ the analytics, and writes charts plus a summary.md. Everything runs locally.
 import argparse
 import base64
 import html as html_lib
+import io
 import json
 import math
 import re
@@ -36,6 +37,21 @@ DEFAULT_OUTPUT = "output"
 REPLY_WINDOW_SECONDS = 60 * 60
 CONVERSATION_WINDOW_SECONDS = 30 * 60
 MESSAGE_FILE_RE = re.compile(r"^message_\d+\.json$")
+
+KNOWN_MESSAGE_KEYS = {
+    "id", "sender_name", "timestamp_ms", "timestamp", "content", "type", "reactions",
+    "share", "photos", "sticker", "gifs", "videos", "audio_files", "files", "polls",
+    "call_duration", "reply_to_message_id", "is_unsent", "is_taken_down", "text",
+}
+
+KNOWN_TYPES = {
+    "Generic", "Call", "Share", "Subscribe", "Unsubscribe", "Game", "Poll", "Plan",
+    "Money", "Unsend", "GroupPoll", "ShareSticker", "Payment", "Checkout", "VideoCall",
+    "MultiwayCall", "MysteryChat", "Pin", "GroupCreate", "GroupUpdate", "Reaction",
+    "GroupNameChange", "GroupAvatarChange", "FriendRequest", "ProfilePic",
+    "EventReminder", "AdminChange", "Archived", "Encrypted", "ThreadIcon",
+    "text", "share", "sticker", "gif", "video", "audio", "file", "call", "system",
+}
 
 STOPWORDS = {
     "the", "a", "an", "and", "or", "but", "is", "are", "was", "were", "be", "been",
@@ -132,7 +148,20 @@ def load_thread(thread_dir):
             title = data["title"]
         if data.get("participants"):
             participants = [p.get("name") for p in data["participants"] if p.get("name")]
-    return title, participants, messages
+    seen = set()
+    unique = []
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        key = m.get("id")
+        if key is None:
+            key = (m.get("sender_name"), m.get("timestamp_ms") or m.get("timestamp"),
+                   m.get("content"))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(m)
+    return title, participants, unique
 
 
 def _parse_tz(tz):
@@ -183,6 +212,22 @@ def normalize_messages(raw, tz=None):
             if actor and reaction:
                 reactions.append((actor, reaction))
         share = m.get("share") if isinstance(m.get("share"), dict) else None
+        photo_uris = [p.get("uri") for p in (m.get("photos") or []) if isinstance(p, dict) and p.get("uri")]
+        gif_uris = [g.get("uri") for g in (m.get("gifs") or []) if isinstance(g, dict) and g.get("uri")]
+        video_uris = [v.get("uri") for v in (m.get("videos") or []) if isinstance(v, dict) and v.get("uri")]
+        audio_uris = [a.get("uri") for a in (m.get("audio_files") or []) if isinstance(a, dict) and a.get("uri")]
+        file_uris = [f.get("uri") for f in (m.get("files") or []) if isinstance(f, dict) and f.get("uri")]
+        file_names = [f.get("name") or f.get("uri") for f in (m.get("files") or [])
+                      if isinstance(f, dict) and (f.get("name") or f.get("uri"))]
+        poll_question = None
+        for poll in m.get("polls") or []:
+            if isinstance(poll, dict) and poll.get("question"):
+                poll_question = poll["question"]
+                break
+        if content is None and poll_question:
+            content = poll_question
+        has_media = bool(photo_uris or gif_uris or video_uris or audio_uris
+                         or file_uris or file_names or m.get("sticker"))
         msgs.append({
             "id": m.get("id"),
             "sender": sender,
@@ -193,11 +238,23 @@ def normalize_messages(raw, tz=None):
             "reactions": reactions,
             "has_photo": bool(m.get("photos")),
             "has_sticker": bool(m.get("sticker")),
-            "photo_uris": [p.get("uri") for p in (m.get("photos") or []) if p.get("uri")],
+            "has_gif": bool(m.get("gifs")),
+            "has_video": bool(m.get("videos")),
+            "has_audio": bool(m.get("audio_files")),
+            "has_file": bool(file_uris or file_names),
+            "has_media": has_media,
+            "photo_uris": photo_uris,
+            "gif_uris": gif_uris,
+            "video_uris": video_uris,
+            "audio_uris": audio_uris,
+            "file_uris": file_uris,
+            "file_names": file_names,
+            "poll_question": poll_question,
             "link": (share or {}).get("link"),
             "call_duration": m.get("call_duration"),
             "reply_to": m.get("reply_to_message_id"),
             "is_unsent": bool(m.get("is_unsent")),
+            "is_taken_down": bool(m.get("is_taken_down")),
         })
     msgs.sort(key=lambda x: x["ts_ms"])
     return msgs
@@ -271,7 +328,7 @@ def core_stats(msgs):
         for e in split_emojis(m["content"]):
             emojis[e] += 1
             per_member_emojis[m["sender"]][e] += 1
-    media = sum(1 for m in msgs if m["has_photo"] or m["has_sticker"])
+    media = sum(1 for m in msgs if m["has_media"])
     links = sum(1 for m in msgs if m["link"])
     calls = sum(1 for m in msgs if m["mtype"] == "Call")
     call_seconds = sum(m["call_duration"] or 0 for m in msgs if m["mtype"] == "Call")
@@ -543,12 +600,25 @@ def links_domains(msgs, top=10):
 def media_leaderboard(msgs):
     photos = Counter()
     stickers = Counter()
+    gifs = Counter()
+    videos = Counter()
+    audio = Counter()
+    files = Counter()
     for m in msgs:
         if m["has_photo"]:
             photos[m["sender"]] += 1
         if m["has_sticker"]:
             stickers[m["sender"]] += 1
-    return {"photos": photos, "stickers": stickers}
+        if m["has_gif"]:
+            gifs[m["sender"]] += 1
+        if m["has_video"]:
+            videos[m["sender"]] += 1
+        if m["has_audio"]:
+            audio[m["sender"]] += 1
+        if m["has_file"]:
+            files[m["sender"]] += 1
+    return {"photos": photos, "stickers": stickers, "gifs": gifs,
+            "videos": videos, "audio": audio, "files": files}
 
 
 def length_trends(msgs):
@@ -704,7 +774,7 @@ def pace_trends(msgs):
         by_day[m["dt"].date()] += 1
         if m["mtype"] == "Call":
             calls_by_month[m["dt"].strftime("%Y-%m")] += 1
-        if m["has_photo"] or m["has_sticker"]:
+        if m["has_media"]:
             media_by_year[m["dt"].year] += 1
     days = sorted(by_day)
     counts = [by_day[d] for d in days]
@@ -782,6 +852,10 @@ def monologues(msgs):
 
 def unsent_stats(msgs):
     return Counter(m["sender"] for m in msgs if m["is_unsent"])
+
+
+def taken_down_stats(msgs):
+    return Counter(m["sender"] for m in msgs if m["is_taken_down"])
 
 
 def emoji_stats(msgs):
@@ -1104,17 +1178,19 @@ def write_charts(msgs, stats, analyses, out_dir, track):
 
     # media leaderboard
     media = analyses.get("media", {})
-    if media and (media["photos"] or media["stickers"]):
-        members = sorted(set(media["photos"]) | set(media["stickers"]))
-        photos = [media["photos"].get(m, 0) for m in members]
-        stickers = [media["stickers"].get(m, 0) for m in members]
+    if media and any(media[k] for k in ("photos", "stickers", "gifs", "videos", "audio", "files")):
+        members = sorted(set().union(*[set(media[k]) for k in
+                                       ("photos", "stickers", "gifs", "videos", "audio", "files")]))
+        labels = ["Photos", "Stickers", "GIFs", "Videos", "Audio", "Files"]
+        keys = ["photos", "stickers", "gifs", "videos", "audio", "files"]
+        series = [[media[k].get(m, 0) for m in members] for k in keys]
         with plt.rc_context(theme):
-            fig, ax = plt.subplots(figsize=(8, 4.5))
-            x = range(len(members))
-            ax.bar(x, photos, width=0.4, label="Photos", color=PALETTE[1])
-            ax.bar([i + 0.4 for i in x], stickers, width=0.4, label="Stickers", color=PALETTE[3])
-            ax.set_xticks([i + 0.2 for i in x])
-            ax.set_xticklabels(members, rotation=30, ha="right", fontsize=9)
+            fig, ax = plt.subplots(figsize=(9, 5))
+            bottom = [0] * len(members)
+            for i, (label, vals) in enumerate(zip(labels, series)):
+                ax.bar(members, vals, bottom=bottom, label=label, color=PALETTE[i % len(PALETTE)])
+                bottom = [b + v for b, v in zip(bottom, vals)]
+            ax.tick_params(axis="x", labelrotation=30, labelsize=9)
             ax.set_title("Media sent (per member)", fontweight="bold")
             ax.legend(fontsize=8)
             save(fig, "media_leaderboard.png")
@@ -1274,7 +1350,7 @@ def write_charts(msgs, stats, analyses, out_dir, track):
             ax.bar(range(len(years)), [pace["media_by_year"][y] for y in years], color=PALETTE[1])
             ax.set_xticks(range(len(years)))
             ax.set_xticklabels(years)
-            ax.set_title("Media (photos/stickers) per year", fontweight="bold")
+            ax.set_title("Media sent per year", fontweight="bold")
             save(fig, "media_by_year.png")
 
     # pair matrices
@@ -1449,6 +1525,15 @@ def _shorten(text, n=40):
     return text[:n] + ("..." if len(text) > n else "")
 
 
+def _media_label(m):
+    for flag, name in (("has_photo", "photo"), ("has_sticker", "sticker"),
+                       ("has_gif", "GIF"), ("has_video", "video"),
+                       ("has_audio", "audio"), ("has_file", "file")):
+        if m[flag]:
+            return name
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # Summary                                                                     #
 # --------------------------------------------------------------------------- #
@@ -1461,7 +1546,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
     lines.append(f"- **Total messages**: {stats['total']:,}")
     lines.append(f"- **Members**: {len(stats['member_msgs'])}")
     lines.append(f"- **Longest daily streak**: {stats['longest_streak']} day{'s' if stats['longest_streak'] != 1 else ''}")
-    lines.append(f"- **Media (photos/stickers)**: {stats['media']}")
+    lines.append(f"- **Media (photos, stickers, GIFs, videos, audio, files)**: {stats['media']}")
     lines.append(f"- **Links shared**: {stats['links']}")
     lines.append(f"- **Calls**: {stats['calls']} ({int(stats['call_seconds'] // 60)} min)")
     lines.append("")
@@ -1567,15 +1652,23 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
         lines.append("")
 
     media = analyses.get("media", {})
-    if media and (media["photos"] or media["stickers"]):
+    if media and any(media[k] for k in ("photos", "stickers", "gifs", "videos", "audio", "files")):
         lines.append("## Media leaderboard")
         lines.append("")
-        lines.append("| Member | Photos | Stickers |")
-        lines.append("|---|---|---|")
-        for member in sorted(set(media["photos"]) | set(media["stickers"]),
-                             key=lambda m: -(media["photos"].get(m, 0) + media["stickers"].get(m, 0))):
+        lines.append("| Member | Photos | Stickers | GIFs | Videos | Audio | Files |")
+        lines.append("|---|---|---|---|---|---|---|")
+        for member in sorted(set().union(*[set(media[k]) for k in
+                                           ("photos", "stickers", "gifs", "videos", "audio", "files")]),
+                             key=lambda m: -(media["photos"].get(m, 0)
+                                             + media["stickers"].get(m, 0)
+                                             + media["gifs"].get(m, 0)
+                                             + media["videos"].get(m, 0)
+                                             + media["audio"].get(m, 0)
+                                             + media["files"].get(m, 0))):
             lines.append(f"| {member} | {media['photos'].get(member, 0)} | "
-                         f"{media['stickers'].get(member, 0)} |")
+                         f"{media['stickers'].get(member, 0)} | {media['gifs'].get(member, 0)} | "
+                         f"{media['videos'].get(member, 0)} | {media['audio'].get(member, 0)} | "
+                         f"{media['files'].get(member, 0)} |")
         lines.append("")
 
     conv = analyses.get("conversations", {})
@@ -1608,12 +1701,9 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
             for m in chain:
                 if m["content"]:
                     labels.append(f"**{m['sender']}**: {_shorten(m['content'], 60)}")
-                elif m["has_photo"]:
-                    labels.append(f"**{m['sender']}**: [photo]")
-                elif m["has_sticker"]:
-                    labels.append(f"**{m['sender']}**: [sticker]")
                 else:
-                    labels.append(f"**{m['sender']}**: [media]")
+                    label = _media_label(m)
+                    labels.append(f"**{m['sender']}**: [{label or 'media'}]")
             lines.append(f"{i}. {' -> '.join(labels)}")
             lines.append("")
 
@@ -1682,7 +1772,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
         if pace and pace["media_by_year"]:
             peak_media = max(pace["media_by_year"].items(), key=lambda kv: kv[1])
             lines.append(f"- Peak media year: **{peak_media[0]}** "
-                         f"({peak_media[1]} photos/stickers).")
+                         f"({peak_media[1]} photos/stickers/GIFs/videos).")
         lines.append("")
 
     pm = analyses.get("pair_matrices")
@@ -1744,6 +1834,18 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
         lines.append("| Member | Unsent |")
         lines.append("|---|---|")
         for member, count in unsent.most_common(10):
+            lines.append(f"| {member} | {count} |")
+        lines.append("")
+
+    taken_down = analyses.get("taken_down")
+    if taken_down and any(taken_down.values()):
+        lines.append("## Removed messages")
+        lines.append("")
+        lines.append("Messages flagged `is_taken_down` (no longer visible in the chat):")
+        lines.append("")
+        lines.append("| Member | Removed |")
+        lines.append("|---|---|")
+        for member, count in taken_down.most_common(10):
             lines.append(f"| {member} | {count} |")
         lines.append("")
 
@@ -1820,6 +1922,182 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
 
 def _base64_png(path):
     return base64.b64encode(path.read_bytes()).decode("ascii")
+
+
+def _fig_to_png(fig):
+    buf = io.BytesIO()
+    fig.savefig(buf, dpi=120, bbox_inches="tight")
+    plt.close(fig)
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+_YEAR_PAGE_CSS = """
+*{box-sizing:border-box}
+body{font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;padding:0 0 60px;color:#202124;background:#fff;line-height:1.5}
+[data-theme="dark"]{color:#e8e8e8;background:#17191f}
+.topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:8px 20px;background:#f7f8fa;border-bottom:1px solid #e3e5e8;flex-wrap:wrap}
+[data-theme="dark"] .topbar{background:#20242d;border-bottom:1px solid #2a2f3a}
+.brand{font-weight:700;font-size:15px}
+.topbar a{color:#5b8ff9;text-decoration:none;font-size:12px}
+main{max-width:860px;margin:0 auto;padding:0 20px}
+h1{font-size:26px;margin-bottom:4px}
+h2{font-size:20px;margin-top:36px;border-bottom:1px solid #e3e5e8;padding-bottom:6px}
+.muted{color:#777;font-size:13px}
+.cards{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
+.card{flex:1;min-width:120px;background:#f7f8fa;border:1px solid #e3e5e8;border-radius:12px;padding:14px}
+.card b{display:block;font-size:22px}
+.card span{font-size:12px;color:#777}
+[data-theme="dark"] .card{background:#20242d;border-color:#2a2f3a}
+[data-theme="dark"] .card span{color:#9aa0a6}
+[data-theme="dark"] h2{border-color:#2a2f3a}
+ul{margin:8px 0}
+li{margin:4px 0}
+img{max-width:100%;border-radius:10px;margin:6px 0}
+table{border-collapse:collapse;width:100%;margin:10px 0}
+th,td{border:1px solid #e3e5e8;padding:6px 10px;text-align:left;font-size:13px}
+[data-theme="dark"] th,[data-theme="dark"] td{border-color:#2a2f3a}
+#theme{border:1px solid #e3e5e8;background:#fff;color:#202124;border-radius:6px;padding:4px 10px;cursor:pointer;margin-left:auto}
+"""
+
+
+def write_year_reviews(title, stats, analyses, out_dir):
+    years = sorted(stats["by_year"])
+    if not years:
+        return
+    index_rows = []
+    for year in years:
+        recap = analyses.get("yearly", {}).get(year, {})
+        pngs = _year_mini_charts(stats, analyses, year)
+        html_doc = _year_page_html(title, year, recap, analyses, pngs)
+        (out_dir / f"year_{year}.html").write_text(html_doc, encoding="utf-8")
+        top = recap.get("top_member", "-")
+        index_rows.append(
+            f"<tr><td><a href='year_{year}.html'>{year}</a></td>"
+            f"<td>{recap.get('total', 0):,}</td>"
+            f"<td>{html_lib.escape(str(top))}</td>"
+            f"<td>{recap.get('active_members', 0)}</td>"
+            f"<td>{recap.get('record_day', '-')}</td></tr>")
+    rows = "".join(index_rows)
+    index = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html_lib.escape(title)} - year in review</title>
+<style>{_YEAR_PAGE_CSS}</style>
+</head><body>
+<div class="topbar"><span class="brand">{html_lib.escape(title)} flashback</span>
+<a href="report.html">Report</a>
+<button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
+<main>
+<h1>Year in review</h1>
+<p class="muted">One page per year of chat history.</p>
+<table>
+<tr><th>Year</th><th>Messages</th><th>Top member</th><th>Active members</th><th>Record day</th></tr>
+{rows}
+</table>
+</main>
+<script>
+var t=document.getElementById('theme');
+t.onclick=function(){{var dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';t.textContent=dark?'Light':'Dark';}};
+</script>
+</body></html>"""
+    (out_dir / "year_in_review.html").write_text(index, encoding="utf-8")
+
+
+def _year_mini_charts(stats, analyses, year):
+    pngs = []
+    months = list(range(1, 13))
+    counts = [0] * 12
+    for d, c in stats["by_day"].items():
+        if d.year == year:
+            counts[d.month - 1] += c
+    if any(counts):
+        fig, ax = plt.subplots(figsize=(6.5, 2.4))
+        ax.bar(months, counts, color=PALETTE[0])
+        ax.set_xticks(months)
+        ax.set_title(f"Messages per month in {year}", fontweight="bold")
+        pngs.append(("Monthly activity", _fig_to_png(fig)))
+
+    topics = analyses.get("topics", {}).get("by_year", {}).get(year)
+    if topics:
+        words = [t["word"] for t in topics[:8]]
+        vals = [t["count"] for t in topics[:8]]
+        fig, ax = plt.subplots(figsize=(6.5, 2.8))
+        _bar(fig, ax, words, vals, "Top words of the year")
+        pngs.append(("Top words", _fig_to_png(fig)))
+
+    emojis = analyses.get("emojis", {}).get("per_year", {}).get(year)
+    if emojis:
+        top = emojis.most_common(8)
+        fig, ax = plt.subplots(figsize=(6.5, 2.8))
+        _bar(fig, ax, [emoji_lib.demojize(e).strip(":") for e, _ in top],
+             [c for _, c in top], "Top emojis of the year")
+        pngs.append(("Top emojis", _fig_to_png(fig)))
+    return pngs
+
+
+def _year_page_html(title, year, recap, analyses, pngs):
+    cards = []
+    cards.append(f"<div class='card'><b>{recap.get('total', 0):,}</b><span>messages</span></div>")
+    cards.append(f"<div class='card'><b>{recap.get('active_members', 0)}</b><span>members active</span></div>")
+    cards.append(f"<div class='card'><b>{html_lib.escape(str(recap.get('top_member', '-')))}</b><span>top member</span></div>")
+    cards.append(f"<div class='card'><b>{recap.get('record_day', '-')}</b><span>record day</span></div>")
+
+    facts = []
+    top_word = recap.get("top_word")
+    if top_word:
+        facts.append(f"<li>Top word: <b>{html_lib.escape(top_word[0])}</b> "
+                     f"({top_word[1]}x)</li>")
+    top_emoji = recap.get("top_emoji")
+    if top_emoji:
+        facts.append(f"<li>Top emoji: <b>{top_emoji[0]}</b> ({top_emoji[1]}x)</li>")
+    record_count = recap.get("record_day_count")
+    if record_count:
+        facts.append(f"<li>Busiest day: <b>{recap.get('record_day')}</b> "
+                     f"with {record_count} messages</li>")
+    reacted = recap.get("best_reacted")
+    if reacted:
+        facts.append(f"<li>Most-reacted: <b>{html_lib.escape(reacted['sender'])}</b> "
+                     f"({len(reacted['reactions'])} reactions) "
+                     f"&quot;{html_lib.escape(_shorten(reacted.get('content'), 70))}&quot;</li>")
+
+    chart_html = "".join(
+        f"<figure><img src='data:image/png;base64,{b64}' alt='{html_lib.escape(label)}'/>"
+        f"<figcaption class='muted'>{html_lib.escape(label)}</figcaption></figure>"
+        for label, b64 in pngs)
+
+    jokes = analyses.get("jokes", {}).get("jokes", [])
+    year_jokes = [j for j in jokes if year in j["years"]]
+    jokes_html = ""
+    if year_jokes:
+        rows = "".join(
+            f"<tr><td><i>{html_lib.escape(j['phrase'])}</i></td><td>{j['count']}</td>"
+            f"<td>{html_lib.escape(', '.join(j['members']))}</td></tr>"
+            for j in year_jokes)
+        jokes_html = f"<h2>Running jokes</h2><table><tr><th>Phrase</th><th>Times</th><th>Members</th></tr>{rows}</table>"
+
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html_lib.escape(title)} - {year} in review</title>
+<style>{_YEAR_PAGE_CSS}</style>
+</head><body>
+<div class="topbar"><span class="brand">{html_lib.escape(title)} flashback</span>
+<a href="year_in_review.html">All years</a>
+<a href="report.html">Report</a>
+<button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
+<main>
+<h1>{year} in review</h1>
+<p class="muted">{html_lib.escape(title)}</p>
+<div class="cards">{''.join(cards)}</div>
+{"<ul>" + "".join(facts) + "</ul>" if facts else ""}
+{chart_html}
+{jokes_html}
+</main>
+<script>
+var t=document.getElementById('theme');
+t.onclick=function(){{var dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';t.textContent=dark?'Light':'Dark';}};
+</script>
+</body></html>"""
 
 
 def _js_msg(m):
@@ -2068,6 +2346,19 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates):
                    if example else "")
         sections.append(_sec("jokes", "Running jokes",
                              ex_html + _table(["Phrase", "Times", "Members", "Years"], rows)))
+    media = analyses.get("media", {})
+    if media and any(media[k] for k in ("photos", "stickers", "gifs", "videos", "audio", "files")):
+        rows = []
+        for member in sorted(set().union(*[set(media[k]) for k in
+                                           ("photos", "stickers", "gifs", "videos", "audio", "files")]),
+                             key=lambda m: sum(media[k].get(m, 0) for k in
+                                               ("photos", "stickers", "gifs", "videos", "audio", "files"))):
+            rows.append((html_lib.escape(member),
+                         *[str(media[k].get(member, 0)) for k in
+                           ("photos", "stickers", "gifs", "videos", "audio", "files")]))
+        sections.append(_sec("media", "Media leaderboard",
+                             _table(["Member", "Photos", "Stickers", "GIFs",
+                                     "Videos", "Audio", "Files"], rows)))
     sections.append(_sec("charts", "Charts", imgs))
 
     nav = "".join(
@@ -2078,10 +2369,11 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates):
                            ("extremes", "Extremes"), ("sentiment", "Sentiment"),
                            ("emojis", "Emoji report"), ("questions", "Questions"),
                            ("topics", "Topics"), ("jokes", "Jokes"),
-                           ("charts", "Charts")]
+                           ("media", "Media"), ("charts", "Charts")]
     )
     body = f"""<div class="topbar"><span class="brand">{html_lib.escape(title)} flashback</span>
 <nav>{nav}</nav>
+<a class="years" href="year_in_review.html">Years</a>
 <button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
 <main>
 <h1>{html_lib.escape(title)} flashback</h1>
@@ -2113,7 +2405,8 @@ body{{font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;padding:0 0 60px
 nav{{display:flex;gap:4px;flex-wrap:wrap;flex:1}}
 nav a{{color:var(--muted);text-decoration:none;font-size:12px;padding:4px 8px;border-radius:6px}}
 nav a:hover{{background:var(--border);color:var(--fg)}}
-#theme{{margin-left:auto;border:1px solid var(--border);background:var(--bg);color:var(--fg);border-radius:6px;padding:4px 10px;cursor:pointer}}
+.years{{margin-left:auto;color:var(--muted);text-decoration:none;font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px}}
+#theme{{border:1px solid var(--border);background:var(--bg);color:var(--fg);border-radius:6px;padding:4px 10px;cursor:pointer}}
 main{{max-width:1040px;margin:0 auto;padding:0 20px}}
 h1{{font-size:26px;margin-bottom:4px}}
 h2{{font-size:20px;margin-top:36px;border-bottom:1px solid var(--border);padding-bottom:6px}}
@@ -2216,8 +2509,13 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates):
                           for u, c in analyses.get("links_domains", {}).get("links", {}).most_common(10)],
         },
         "media": {m: {"photos": analyses["media"]["photos"].get(m, 0),
-                      "stickers": analyses["media"]["stickers"].get(m, 0)}
-                  for m in sorted(set(analyses["media"]["photos"]) | set(analyses["media"]["stickers"]))},
+                      "stickers": analyses["media"]["stickers"].get(m, 0),
+                      "gifs": analyses["media"]["gifs"].get(m, 0),
+                      "videos": analyses["media"]["videos"].get(m, 0),
+                      "audio": analyses["media"]["audio"].get(m, 0),
+                      "files": analyses["media"]["files"].get(m, 0)}
+                  for m in sorted(set().union(*[set(analyses["media"][k]) for k in
+                                                ("photos", "stickers", "gifs", "videos", "audio", "files")]))},
         "conversations": {
             "count": analyses["conversations"]["conversation_count"],
             "longest_run_msgs": analyses["conversations"]["longest_run_len"],
@@ -2259,6 +2557,7 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates):
                         "per_member_longest": dict(analyses["monologues"]["per_member_longest"])}
                        if analyses.get("monologues") else None),
         "unsent": dict(analyses["unsent"]) if analyses.get("unsent") else None,
+        "taken_down": dict(analyses["taken_down"]) if analyses.get("taken_down") and any(analyses["taken_down"].values()) else None,
         "emojis": ({"total": analyses["emojis"]["total_emojis"],
                     "emojis_per_100": analyses["emojis"]["emojis_per_100"],
                     "per_member": {m: [{"emoji": e, "count": c} for e, c in cnt.most_common(20)]
@@ -2420,6 +2719,7 @@ def process_thread(thread_dir, args):
         "wordcloud": word_cloud_data(msgs),
         "monologues": monologues(msgs),
         "unsent": unsent_stats(msgs),
+        "taken_down": taken_down_stats(msgs),
         "emojis": emoji_stats(msgs),
         "questions": question_stats(msgs),
         "topics": topic_words(msgs),
@@ -2433,6 +2733,8 @@ def process_thread(thread_dir, args):
     write_summary(title, stats, analyses, analyses["track"], out_dir, anonymized,
                   [oldest[:10], newest[:10]])
     write_report_html(title, stats, analyses, out_dir, anonymized, [oldest[:10], newest[:10]])
+    _progress(args, "year reviews")
+    write_year_reviews(title, stats, analyses, out_dir)
     if args.json:
         write_summary_json(title, stats, analyses, out_dir, anonymized, [oldest[:10], newest[:10]])
     console_summary(title, stats, analyses, [oldest[:10], newest[:10]])
@@ -2484,6 +2786,167 @@ def serve(thread_dirs, args):
     return 0
 
 
+def _message_has_content(m):
+    if m.get("content"):
+        return True
+    if any(m.get(k) for k in ("photos", "sticker", "gifs", "videos", "audio_files", "files")):
+        return True
+    share = m.get("share") if isinstance(m.get("share"), dict) else None
+    if share and (share.get("link") or share.get("text")):
+        return True
+    if m.get("call_duration") or m.get("polls") or m.get("reactions"):
+        return True
+    return False
+
+
+def _message_media_uris(m):
+    for key in ("photos", "gifs", "videos", "audio_files"):
+        for item in m.get(key) or []:
+            if isinstance(item, dict) and item.get("uri"):
+                yield item["uri"]
+    for item in m.get("files") or []:
+        if isinstance(item, dict) and item.get("uri"):
+            yield item["uri"]
+
+
+def _resolve_media_path(thread_dir, uri):
+    base = thread_dir.resolve()
+    for candidate in (Path(uri), Path(uri.lstrip("/"))):
+        p = (base / candidate).resolve()
+        if p.is_file() and (candidate.is_absolute() or base in p.parents or p == base):
+            return p
+    return None
+
+
+def check_thread(thread_dir, args):
+    files = sorted(thread_dir.glob("message_*.json"), key=numeric_key)
+    if not files:
+        print(f"  [check] {thread_dir}: no message files")
+        return
+    title = thread_dir.name
+    types = Counter()
+    keys = Counter()
+    empty = 0
+    missing_media = []
+    media_count = 0
+    total = 0
+    unreadable = 0
+    dupes = 0
+    seen_ids = set()
+    seen_fallback = set()
+    per_file = []
+    for f in files:
+        try:
+            data = json.loads(f.read_text(encoding="utf-8", errors="ignore"))
+        except json.JSONDecodeError:
+            raw = re.sub(r"[\x00-\x1f\x7f]", " ", f.read_text(encoding="utf-8", errors="ignore"))
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                print(f"  [check] {f.name}: unreadable ({exc})")
+                unreadable += 1
+                continue
+        if data.get("title"):
+            title = data["title"]
+        f_total = 0
+        f_oldest = f_newest = None
+        for m in data.get("messages", []):
+            if not isinstance(m, dict):
+                continue
+            total += 1
+            f_total += 1
+            ts = m.get("timestamp_ms")
+            if ts is None:
+                ts = m.get("timestamp")
+            if ts is not None:
+                try:
+                    dt = datetime.fromtimestamp(int(float(ts)) / 1000)
+                except (TypeError, ValueError):
+                    dt = None
+                if dt is not None:
+                    f_oldest = dt if f_oldest is None else min(f_oldest, dt)
+                    f_newest = dt if f_newest is None else max(f_newest, dt)
+            types[m.get("type", "Generic")] += 1
+            for k in m:
+                keys[k] += 1
+            mid = m.get("id")
+            if mid is not None:
+                if mid in seen_ids:
+                    dupes += 1
+                else:
+                    seen_ids.add(mid)
+            else:
+                fkey = (m.get("sender_name"), m.get("timestamp_ms") or m.get("timestamp"),
+                        m.get("content"))
+                if fkey in seen_fallback:
+                    dupes += 1
+                else:
+                    seen_fallback.add(fkey)
+            if not _message_has_content(m):
+                empty += 1
+            for uri in _message_media_uris(m):
+                media_count += 1
+                if _resolve_media_path(thread_dir, uri) is None:
+                    missing_media.append((f.name, uri))
+        per_file.append({
+            "file": f.name, "messages": f_total,
+            "oldest": f_oldest.strftime("%Y-%m-%d %H:%M") if f_oldest else None,
+            "newest": f_newest.strftime("%Y-%m-%d %H:%M") if f_newest else None,
+        })
+
+    gaps = []
+    for a, b in zip(per_file, per_file[1:]):
+        if a["newest"] and b["oldest"]:
+            days = (datetime.strptime(b["oldest"], "%Y-%m-%d %H:%M")
+                    - datetime.strptime(a["newest"], "%Y-%m-%d %H:%M")).days
+            gaps.append((a["file"], b["file"], days))
+
+    unknown_types = sorted(t for t in types if t not in KNOWN_TYPES)
+    unknown_keys = sorted(k for k in keys if k not in KNOWN_MESSAGE_KEYS)
+
+    print(f"  [check] {title}  ({thread_dir})")
+    print(f"    files: {len(files)} | messages: {total:,} | unreadable: {unreadable:,}")
+    print(f"    types: " + ", ".join(f"{t} {types[t]:,}" for t in sorted(types)) or "none")
+    if unknown_types:
+        print(f"    unknown types: {', '.join(unknown_types)}")
+    if unknown_keys:
+        print(f"    unknown message keys: {', '.join(unknown_keys)}")
+    print(f"    empty messages: {empty:,}")
+    print(f"    media attachments: {media_count:,} | missing on disk: {len(missing_media):,}")
+    for fname, uri in missing_media[:5]:
+        print(f"      missing: {fname} -> {uri}")
+    print(f"    duplicate messages: {dupes:,}")
+    big_gaps = [g for g in gaps if g[2] > 90]
+    if big_gaps:
+        print("    file gaps over 90 days:")
+        for a, b, days in big_gaps:
+            print(f"      {a} -> {b}: {days} days")
+    else:
+        print("    file gaps: none over 90 days")
+
+    if args.json:
+        out_dir = Path(args.output) / _slug(title)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "title": title,
+            "thread_dir": str(thread_dir),
+            "files": per_file,
+            "messages": total,
+            "unreadable": unreadable,
+            "types": dict(types),
+            "unknown_types": unknown_types,
+            "unknown_keys": unknown_keys,
+            "empty_messages": empty,
+            "media_count": media_count,
+            "missing_media": [{"file": f, "uri": u} for f, u in missing_media[:100]],
+            "duplicates": dupes,
+            "file_gaps_over_90d": [{"from": a, "to": b, "days": d} for a, b, d in big_gaps],
+        }
+        (out_dir / "check.json").write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"    wrote {out_dir / 'check.json'}")
+
+
 def _thread_fingerprint(thread_dir):
     files = sorted(thread_dir.glob("message_*.json"), key=numeric_key)
     return [[f.name, f.stat().st_size, f.stat().st_mtime_ns] for f in files]
@@ -2501,6 +2964,10 @@ def run(args):
     thread_dirs = find_thread_dirs(args.input)
     if not thread_dirs:
         return 1
+    if args.check:
+        for d in thread_dirs:
+            check_thread(d, args)
+        return 0
     if args.serve:
         return serve(thread_dirs, args)
     if len(thread_dirs) > 1:
@@ -2589,6 +3056,10 @@ def main(argv=None):
                         help="Show phase progress while analyzing")
     parser.add_argument("--incremental", action="store_true",
                         help="Skip threads that are unchanged since the last run")
+    parser.add_argument("--check", action="store_true",
+                        help="Validate the export instead of analyzing: report unknown message "
+                             "types/keys, empty messages, missing media files, duplicate "
+                             "messages, and gaps between message files (always exits 0)")
     pre = parser.parse_args(argv)
     if pre.config:
         try:

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saturday Squad - year in review</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;padding:0 0 60px;color:#202124;background:#fff;line-height:1.5}
+[data-theme="dark"]{color:#e8e8e8;background:#17191f}
+.topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:8px 20px;background:#f7f8fa;border-bottom:1px solid #e3e5e8;flex-wrap:wrap}
+[data-theme="dark"] .topbar{background:#20242d;border-bottom:1px solid #2a2f3a}
+.brand{font-weight:700;font-size:15px}
+.topbar a{color:#5b8ff9;text-decoration:none;font-size:12px}
+main{max-width:860px;margin:0 auto;padding:0 20px}
+h1{font-size:26px;margin-bottom:4px}
+h2{font-size:20px;margin-top:36px;border-bottom:1px solid #e3e5e8;padding-bottom:6px}
+.muted{color:#777;font-size:13px}
+.cards{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
+.card{flex:1;min-width:120px;background:#f7f8fa;border:1px solid #e3e5e8;border-radius:12px;padding:14px}
+.card b{display:block;font-size:22px}
+.card span{font-size:12px;color:#777}
+[data-theme="dark"] .card{background:#20242d;border-color:#2a2f3a}
+[data-theme="dark"] .card span{color:#9aa0a6}
+[data-theme="dark"] h2{border-color:#2a2f3a}
+ul{margin:8px 0}
+li{margin:4px 0}
+img{max-width:100%;border-radius:10px;margin:6px 0}
+table{border-collapse:collapse;width:100%;margin:10px 0}
+th,td{border:1px solid #e3e5e8;padding:6px 10px;text-align:left;font-size:13px}
+[data-theme="dark"] th,[data-theme="dark"] td{border-color:#2a2f3a}
+#theme{border:1px solid #e3e5e8;background:#fff;color:#202124;border-radius:6px;padding:4px 10px;cursor:pointer;margin-left:auto}
+</style>
+</head><body>
+<div class="topbar"><span class="brand">Saturday Squad flashback</span>
+<a href="report.html">Report</a>
+<button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
+<main>
+<h1>Year in review</h1>
+<p class="muted">One page per year of chat history.</p>
+<table>
+<tr><th>Year</th><th>Messages</th><th>Top member</th><th>Active members</th><th>Record day</th></tr>
+<tr><td><a href='year_2017.html'>2017</a></td><td>14</td><td>Alice</td><td>4</td><td>2017-01-01</td></tr><tr><td><a href='year_2018.html'>2018</a></td><td>12</td><td>Bob</td><td>4</td><td>2018-06-01</td></tr><tr><td><a href='year_2019.html'>2019</a></td><td>11</td><td>Alice</td><td>4</td><td>2019-10-06</td></tr><tr><td><a href='year_2020.html'>2020</a></td><td>13</td><td>Alice</td><td>4</td><td>2020-10-03</td></tr><tr><td><a href='year_2021.html'>2021</a></td><td>9</td><td>Charlie</td><td>4</td><td>2021-12-01</td></tr><tr><td><a href='year_2022.html'>2022</a></td><td>8</td><td>Bob</td><td>4</td><td>2022-05-10</td></tr><tr><td><a href='year_2023.html'>2023</a></td><td>7</td><td>Dana</td><td>4</td><td>2023-12-21</td></tr><tr><td><a href='year_2024.html'>2024</a></td><td>8</td><td>Bob</td><td>4</td><td>2024-02-14</td></tr><tr><td><a href='year_2025.html'>2025</a></td><td>8</td><td>Dana</td><td>4</td><td>2025-08-09</td></tr><tr><td><a href='year_2026.html'>2026</a></td><td>4</td><td>Alice</td><td>4</td><td>2026-01-01</td></tr>
+</table>
+</main>
+<script>
+var t=document.getElementById('theme');
+t.onclick=function(){var dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';t.textContent=dark?'Light':'Dark';};
+</script>
+</body></html>

@@ -1,6 +1,6 @@
 {
   "title": "Saturday Squad",
-  "generated": "2026-08-04 14:14",
+  "generated": "2026-08-04 15:42",
   "anonymized": false,
   "period": {
     "start": "2017-01-01",
@@ -12,15 +12,27 @@
   "media": {
     "Alice": {
       "photos": 2,
-      "stickers": 0
+      "stickers": 0,
+      "gifs": 0,
+      "videos": 0,
+      "audio": 0,
+      "files": 0
     },
     "Charlie": {
       "photos": 1,
-      "stickers": 0
+      "stickers": 0,
+      "gifs": 0,
+      "videos": 0,
+      "audio": 0,
+      "files": 0
     },
     "Dana": {
       "photos": 1,
-      "stickers": 0
+      "stickers": 0,
+      "gifs": 0,
+      "videos": 0,
+      "audio": 0,
+      "files": 0
     }
   },
   "calls": 0,
@@ -1270,6 +1282,7 @@
     }
   },
   "unsent": null,
+  "taken_down": null,
   "emojis": {
     "total": 1,
     "emojis_per_100": {
