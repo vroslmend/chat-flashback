@@ -1,6 +1,6 @@
 # Saturday Squad flashback
 
-Generated 2026-08-04 12:21
+Generated 2026-08-04 13:14
 - **Period**: 2017-01-01 to 2026-01-01
 - **Total messages**: 94
 - **Members**: 4
@@ -150,8 +150,8 @@ Median time to reply, fastest first:
 | Member | Photos | Stickers |
 |---|---|---|
 | Alice | 2 | 0 |
-| Charlie | 1 | 0 |
 | Dana | 1 | 0 |
+| Charlie | 1 | 0 |
 
 ## Conversation starters
 
@@ -225,29 +225,77 @@ Scored **90** messages. English-only; may be noisy on mixed-language chat.
 - Most-reacted: **Dana** (2018-12-25, 3 reactions) "merry christmas everyone"
 - Record day: **2025-08-09** (7 messages)
 
+## Activity & pace
+
+- **27** distinct active days.
+- Busiest day: **7** messages.
+- Average **3.5** messages per active day.
+- Peak media year: **2019** (1 photos/stickers).
+
+## Pair dynamics
+
+Row replies to column (within 1 hour), and row reacts to column's messages:
+
+- Most replies: **Bob** -> **Alice** (12 times).
+- Most reactions: **Alice** -> **Bob** (4 times).
+
+## Hourly profiles
+
+| Member | Peak hour |
+|---|---|
+| Alice | 1:00 |
+| Bob | 2:00 |
+| Charlie | 1:00 |
+| Dana | 1:00 |
+
+## Monologues
+
+**0** moment(s) where someone went 4+ messages solo ('could've been an email').
+
+| Member | Longest solo run |
+|---|---|
+| Charlie | 3 |
+| Dana | 2 |
+
+Record solo run: **Charlie** with 3 messages (2021-02-14 08:00).
+
 ## Charts
 
 ![activity_by_hour.png](activity_by_hour.png)
 
 ![activity_by_weekday.png](activity_by_weekday.png)
 
+![activity_heatmap.png](activity_heatmap.png)
+
 ![conversation_starters.png](conversation_starters.png)
 
 ![ghosting.png](ghosting.png)
 
+![hourly_radar.png](hourly_radar.png)
+
 ![length_trends.png](length_trends.png)
+
+![media_by_year.png](media_by_year.png)
 
 ![media_leaderboard.png](media_leaderboard.png)
 
 ![messages_by_year.png](messages_by_year.png)
 
+![monologues.png](monologues.png)
+
 ![monthly_timeline.png](monthly_timeline.png)
 
 ![most_reacted.png](most_reacted.png)
 
+![pace_trends.png](pace_trends.png)
+
+![reaction_matrix.png](reaction_matrix.png)
+
 ![reactions_given.png](reactions_given.png)
 
 ![reply_chains.png](reply_chains.png)
+
+![reply_matrix.png](reply_matrix.png)
 
 ![response_speed.png](response_speed.png)
 
@@ -270,5 +318,15 @@ Scored **90** messages. English-only; may be noisy on mixed-language chat.
 ![tracked_terms.png](tracked_terms.png)
 
 ![word_trends.png](word_trends.png)
+
+![wordcloud.png](wordcloud.png)
+
+![wordcloud_alice.png](wordcloud_alice.png)
+
+![wordcloud_bob.png](wordcloud_bob.png)
+
+![wordcloud_charlie.png](wordcloud_charlie.png)
+
+![wordcloud_dana.png](wordcloud_dana.png)
 
 ![yearly_recap.png](yearly_recap.png)

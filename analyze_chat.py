@@ -13,12 +13,13 @@ import re
 import sys
 import textwrap
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 import emoji as emoji_lib
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -165,6 +166,7 @@ def normalize_messages(raw):
             "reactions": reactions,
             "has_photo": bool(m.get("photos")),
             "has_sticker": bool(m.get("sticker")),
+            "photo_uris": [p.get("uri") for p in (m.get("photos") or []) if p.get("uri")],
             "link": (share or {}).get("link"),
             "call_duration": m.get("call_duration"),
             "reply_to": m.get("reply_to_message_id"),
@@ -646,6 +648,115 @@ def sentiment_analysis(msgs):
     }
 
 
+def activity_heatmap(msgs):
+    by_day = Counter()
+    for m in msgs:
+        by_day[m["dt"].date()] += 1
+    if not by_day:
+        return None
+    start = min(by_day)
+    end = max(by_day)
+    first_monday = start - timedelta(days=start.weekday())
+    last_monday = end - timedelta(days=end.weekday())
+    weeks = []
+    week_starts = []
+    d = first_monday
+    while d <= last_monday:
+        weeks.append([by_day.get(d + timedelta(days=i), 0) for i in range(7)])
+        week_starts.append(d)
+        d += timedelta(days=7)
+    return {"weeks": weeks, "week_starts": week_starts,
+            "max_day": max(by_day.values()), "active_days": len(by_day)}
+
+
+def pace_trends(msgs):
+    by_day = Counter()
+    calls_by_month = Counter()
+    media_by_year = Counter()
+    for m in msgs:
+        by_day[m["dt"].date()] += 1
+        if m["mtype"] == "Call":
+            calls_by_month[m["dt"].strftime("%Y-%m")] += 1
+        if m["has_photo"] or m["has_sticker"]:
+            media_by_year[m["dt"].year] += 1
+    days = sorted(by_day)
+    counts = [by_day[d] for d in days]
+    rolling = []
+    for i in range(len(days)):
+        lo = max(0, i - 29)
+        rolling.append(round(sum(counts[lo:i + 1]) / (i - lo + 1), 2))
+    return {"days": [d.strftime("%Y-%m-%d") for d in days], "counts": counts,
+            "rolling": rolling, "calls_by_month": calls_by_month,
+            "media_by_year": media_by_year}
+
+
+def pair_matrices(msgs):
+    members = sorted({m["sender"] for m in msgs})
+    reply = defaultdict(lambda: defaultdict(int))
+    for prev, cur in zip(msgs, msgs[1:]):
+        if cur["sender"] == prev["sender"]:
+            continue
+        gap = (cur["ts_ms"] - prev["ts_ms"]) / 1000
+        if 0 < gap <= REPLY_WINDOW_SECONDS:
+            reply[cur["sender"]][prev["sender"]] += 1
+    reaction = defaultdict(lambda: defaultdict(int))
+    for m in msgs:
+        if not m["reactions"]:
+            continue
+        target = m["sender"]
+        for actor, _ in m["reactions"]:
+            reaction[actor][target] += 1
+    return {"members": members, "reply": reply, "reaction": reaction}
+
+
+def hourly_radar(msgs):
+    per_member = defaultdict(lambda: [0] * 24)
+    for m in msgs:
+        per_member[m["sender"]][m["dt"].hour] += 1
+    return {member: hours for member, hours in per_member.items()}
+
+
+def word_cloud_data(msgs):
+    overall = Counter()
+    per_member = defaultdict(Counter)
+    for m in msgs:
+        for w in tokenize(m["content"]):
+            if w not in STOPWORDS and len(w) > 1:
+                overall[w] += 1
+                per_member[m["sender"]][w] += 1
+    return {"overall": overall, "per_member": per_member}
+
+
+def monologues(msgs):
+    runs = []
+    current = []
+    prev = None
+    for m in msgs:
+        same_sender = prev is not None and m["sender"] == prev["sender"]
+        in_window = prev is not None and (m["ts_ms"] - prev["ts_ms"]) / 1000 <= CONVERSATION_WINDOW_SECONDS
+        if same_sender and in_window:
+            current.append(m)
+        else:
+            if len(current) >= 2:
+                runs.append(current)
+            current = [m]
+        prev = m
+    if len(current) >= 2:
+        runs.append(current)
+    per_member = Counter()
+    for run in runs:
+        if len(run) > per_member[run[0]["sender"]]:
+            per_member[run[0]["sender"]] = len(run)
+    longest = max(runs, key=len) if runs else []
+    return {"runs": runs, "per_member_longest": per_member,
+            "longest_run": longest, "longest_run_len": len(longest),
+            "email_moments": sum(1 for r in runs if len(r) >= 4)}
+
+
+def unsent_stats(msgs):
+    return Counter(m["sender"] for m in msgs if m["is_unsent"])
+
+
 # --------------------------------------------------------------------------- #
 # Charts                                                                      #
 # --------------------------------------------------------------------------- #
@@ -897,6 +1008,21 @@ def write_charts(msgs, stats, analyses, out_dir, track):
             ax.set_xticklabels([months[i][:7] for i in range(0, len(months), max(1, len(months) // 12))],
                                rotation=45, ha="right", fontsize=8)
             ax.set_title("Messages per month", fontweight="bold")
+            rd_month = ex["record_day"].strftime("%Y-%m")
+            if rd_month in months:
+                idx = months.index(rd_month)
+                peak = max(vals)
+                ax.annotate("record day", xy=(idx, ex["monthly"][rd_month]),
+                            xytext=(idx, peak * 1.05), ha="center", fontsize=8,
+                            color=PALETTE[3], fontweight="bold")
+            mr = ex.get("most_reacted")
+            if mr:
+                mr_month = mr["dt"].strftime("%Y-%m")
+                if mr_month in months:
+                    idx = months.index(mr_month)
+                    ax.annotate("most reacted", xy=(idx, ex["monthly"][mr_month]),
+                                xytext=(idx, -peak * 0.08), ha="center", fontsize=8,
+                                color=PALETTE[0], fontweight="bold")
             save(fig, "monthly_timeline.png")
 
     # sentiment
@@ -917,6 +1043,154 @@ def write_charts(msgs, stats, analyses, out_dir, track):
                 ax.set_xticks(ys)
                 ax.set_title("Average sentiment per year (VADER x100)", fontweight="bold")
                 save(fig, "sentiment_over_time.png")
+
+    # activity heatmap (GitHub-style calendar)
+    hm = analyses.get("heatmap")
+    if hm:
+        grid = np.array(hm["weeks"]).T
+        with plt.rc_context(theme):
+            fig, ax = plt.subplots(figsize=(max(6, len(hm["weeks"]) * 0.13), 2.8))
+            im = ax.imshow(grid, aspect="auto", cmap="Blues",
+                           vmin=0, vmax=max(1, hm["max_day"]))
+            ax.set_yticks(range(7))
+            ax.set_yticklabels(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], fontsize=7)
+            weeks = hm["week_starts"]
+            step = max(1, len(weeks) // 12)
+            ticks = list(range(0, len(weeks), step))
+            ax.set_xticks(ticks)
+            ax.set_xticklabels([weeks[i].strftime("%Y-%m-%d") for i in ticks],
+                               rotation=90, fontsize=7)
+            ax.set_title(f"Activity heatmap: {hm['active_days']} active days, "
+                         f"busiest day {hm['max_day']} messages", fontweight="bold")
+            fig.colorbar(im, ax=ax, shrink=0.8)
+            save(fig, "activity_heatmap.png")
+
+    # pace trends
+    pace = analyses.get("pace")
+    if pace and pace["days"]:
+        with plt.rc_context(theme):
+            fig, ax = plt.subplots(figsize=(11, 3.5))
+            ax.plot(range(len(pace["days"])), pace["rolling"], color=PALETTE[0])
+            ax.set_title("Average messages per day (30-day rolling)", fontweight="bold")
+            step = max(1, len(pace["days"]) // 12)
+            ax.set_xticks(range(0, len(pace["days"]), step))
+            ax.set_xticklabels([pace["days"][i] for i in range(0, len(pace["days"]), step)],
+                               rotation=45, ha="right", fontsize=7)
+            save(fig, "pace_trends.png")
+
+    if pace and pace["calls_by_month"]:
+        with plt.rc_context(theme):
+            fig, ax = plt.subplots(figsize=(9, 3))
+            months = sorted(pace["calls_by_month"])
+            ax.bar(range(len(months)), [pace["calls_by_month"][m] for m in months], color=PALETTE[2])
+            ax.set_title("Calls per month", fontweight="bold")
+            step = max(1, len(months) // 12)
+            ax.set_xticks(range(0, len(months), step))
+            ax.set_xticklabels([months[i] for i in range(0, len(months), step)],
+                               rotation=45, ha="right", fontsize=7)
+            save(fig, "calls_over_time.png")
+
+    if pace and pace["media_by_year"]:
+        with plt.rc_context(theme):
+            fig, ax = plt.subplots(figsize=(9, 3))
+            years = sorted(pace["media_by_year"])
+            ax.bar(range(len(years)), [pace["media_by_year"][y] for y in years], color=PALETTE[1])
+            ax.set_xticks(range(len(years)))
+            ax.set_xticklabels(years)
+            ax.set_title("Media (photos/stickers) per year", fontweight="bold")
+            save(fig, "media_by_year.png")
+
+    # pair matrices
+    pm = analyses.get("pair_matrices")
+    if pm:
+        def _matrix_plot(matrix, name, title):
+            members = pm["members"]
+            n = len(members)
+            data = np.zeros((n, n))
+            for i, a in enumerate(members):
+                for j, b in enumerate(members):
+                    data[i, j] = matrix[a].get(b, 0)
+            with plt.rc_context(theme):
+                fig, ax = plt.subplots(figsize=(max(5, n * 0.55), max(4, n * 0.5)))
+                im = ax.imshow(data, cmap="YlOrRd")
+                ax.set_xticks(range(n))
+                ax.set_yticks(range(n))
+                ax.set_xticklabels(members, rotation=45, ha="right", fontsize=8)
+                ax.set_yticklabels(members, fontsize=8)
+                ax.set_xlabel("was replied to / message sender")
+                if n <= 15 and data.max() > 0:
+                    for i in range(n):
+                        for j in range(n):
+                            if data[i, j]:
+                                ax.text(j, i, int(data[i, j]), ha="center", va="center", fontsize=7)
+                ax.set_title(title, fontweight="bold")
+                fig.colorbar(im, ax=ax, shrink=0.8)
+                save(fig, name)
+        _matrix_plot(pm["reply"], "reply_matrix.png",
+                     "Who replies to whom (within 1 hour)")
+        _matrix_plot(pm["reaction"], "reaction_matrix.png",
+                     "Who reacts to whose messages")
+
+    # hourly radar profiles
+    radar = analyses.get("radar")
+    if radar:
+        angles = np.linspace(0, 2 * np.pi, 24, endpoint=False).tolist()
+        angles += angles[:1]
+        with plt.rc_context(theme):
+            fig, ax = plt.subplots(figsize=(7, 7), subplot_kw={"projection": "polar"})
+            for i, (member, hours) in enumerate(sorted(radar.items())):
+                vals = hours + hours[:1]
+                c = PALETTE[i % len(PALETTE)]
+                ax.plot(angles, vals, label=member, color=c)
+                ax.fill(angles, vals, alpha=0.08, color=c)
+            ax.set_xticks(angles[:-1])
+            ax.set_xticklabels([str(h) for h in range(24)], fontsize=7)
+            ax.set_title("Hourly activity profile (hours 0-23)", fontweight="bold")
+            ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1), fontsize=8)
+            save(fig, "hourly_radar.png")
+
+    # word clouds
+    wc_data = analyses.get("wordcloud")
+    if wc_data:
+        try:
+            from wordcloud import WordCloud
+        except Exception:
+            wc_data = None
+        else:
+            def save_wc(counter, name, label):
+                wc = WordCloud(width=900, height=420, background_color="white",
+                               colormap="viridis", max_words=120, random_state=42)
+                wc.generate_from_frequencies(dict(counter))
+                with plt.rc_context(theme):
+                    fig, ax = plt.subplots(figsize=(10, 4.6))
+                    ax.imshow(wc, interpolation="bilinear")
+                    ax.axis("off")
+                    ax.set_title(label, fontweight="bold")
+                    save(fig, name)
+            save_wc(wc_data["overall"], "wordcloud.png", "Overall word cloud")
+            for member, counter in sorted(wc_data["per_member"].items())[:6]:
+                save_wc(counter, f"wordcloud_{_slug(member)}.png",
+                        f"{member} word cloud")
+
+    # monologues
+    mono = analyses.get("monologues")
+    if mono and mono["per_member_longest"]:
+        with plt.rc_context(theme):
+            fig, ax = plt.subplots(figsize=(8, 4))
+            top_mono = mono["per_member_longest"].most_common(10)
+            _bar(fig, ax, [n for n, _ in top_mono], [c for _, c in top_mono],
+                 "Longest solo run (messages in a row)")
+            save(fig, "monologues.png")
+
+    # unsent
+    unsent = analyses.get("unsent")
+    if unsent and any(unsent.values()):
+        with plt.rc_context(theme):
+            fig, ax = plt.subplots(figsize=(8, 4))
+            top_unsent = unsent.most_common(10)
+            _bar(fig, ax, [n for n, _ in top_unsent], [c for _, c in top_unsent],
+                 "Unsent messages per member")
+            save(fig, "unsent.png")
 
 
 def _shorten(text, n=40):
@@ -1146,6 +1420,84 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
         lines.append(f"- Record day: **{ex['record_day']}** ({ex['record_day_count']} messages)")
         lines.append("")
 
+    hm = analyses.get("heatmap")
+    if hm:
+        lines.append("## Activity & pace")
+        lines.append("")
+        lines.append(f"- **{hm['active_days']}** distinct active days.")
+        lines.append(f"- Busiest day: **{hm['max_day']}** messages.")
+        pace = analyses.get("pace")
+        if pace and pace["days"]:
+            avg = sum(pace["counts"]) / len(pace["days"])
+            lines.append(f"- Average **{avg:.1f}** messages per active day.")
+        if pace and pace["media_by_year"]:
+            peak_media = max(pace["media_by_year"].items(), key=lambda kv: kv[1])
+            lines.append(f"- Peak media year: **{peak_media[0]}** "
+                         f"({peak_media[1]} photos/stickers).")
+        lines.append("")
+
+    pm = analyses.get("pair_matrices")
+    if pm:
+        best_reply = max(((a, b, c) for a, row in pm["reply"].items()
+                          for b, c in row.items()), key=lambda x: x[2], default=None)
+        best_react = max(((a, b, c) for a, row in pm["reaction"].items()
+                          for b, c in row.items()), key=lambda x: x[2], default=None)
+        lines.append("## Pair dynamics")
+        lines.append("")
+        lines.append("Row replies to column (within 1 hour), and row reacts to column's "
+                     "messages:")
+        lines.append("")
+        if best_reply:
+            lines.append(f"- Most replies: **{best_reply[0]}** -> **{best_reply[1]}** "
+                         f"({best_reply[2]} times).")
+        if best_react:
+            lines.append(f"- Most reactions: **{best_react[0]}** -> **{best_react[1]}** "
+                         f"({best_react[2]} times).")
+        lines.append("")
+
+    radar = analyses.get("radar")
+    if radar:
+        peak_hours = []
+        for member, hours in radar.items():
+            peak = max(range(24), key=lambda h: hours[h])
+            peak_hours.append((member, peak))
+        lines.append("## Hourly profiles")
+        lines.append("")
+        lines.append("| Member | Peak hour |")
+        lines.append("|---|---|")
+        for member, hour in sorted(peak_hours):
+            lines.append(f"| {member} | {hour}:00 |")
+        lines.append("")
+
+    mono = analyses.get("monologues")
+    if mono and mono["longest_run"]:
+        lines.append("## Monologues")
+        lines.append("")
+        lines.append(f"**{mono['email_moments']}** moment(s) where someone went 4+ "
+                     f"messages solo ('could've been an email').")
+        lines.append("")
+        lines.append("| Member | Longest solo run |")
+        lines.append("|---|---|")
+        for member, length in mono["per_member_longest"].most_common(10):
+            lines.append(f"| {member} | {length} |")
+        run = mono["longest_run"]
+        lines.append("")
+        lines.append(f"Record solo run: **{run[0]['sender']}** with {len(run)} messages "
+                     f"({run[0]['dt'].strftime('%Y-%m-%d %H:%M')}).")
+        lines.append("")
+
+    unsent = analyses.get("unsent")
+    if unsent and any(unsent.values()):
+        lines.append("## Unsent messages")
+        lines.append("")
+        lines.append("Messages typed but unsent (`is_unsent`):")
+        lines.append("")
+        lines.append("| Member | Unsent |")
+        lines.append("|---|---|")
+        for member, count in unsent.most_common(10):
+            lines.append(f"| {member} | {count} |")
+        lines.append("")
+
     lines.append("## Charts")
     lines.append("")
     charts = sorted(p.name for p in out_dir.glob("*.png"))
@@ -1172,41 +1524,149 @@ def _js_msg(m):
     }
 
 
+def insights(stats, analyses):
+    out = []
+    if stats["member_msgs"]:
+        top = stats["member_msgs"].most_common(1)[0]
+        out.append(f"{top[0]} leads the chat with {top[1]:,} messages "
+                   f"({100 * top[1] / max(1, stats['total']):.0f}% of the chat).")
+    conv = analyses.get("conversations", {})
+    if conv and conv["longest_run_len"]:
+        out.append(f"The longest single session ran {conv['longest_run_len']} messages.")
+    speed = analyses.get("speed", {})
+    if speed["table"]:
+        fastest = speed["table"][0]
+        out.append(f"{fastest['member']} answers fastest with a "
+                   f"{fastest['median_m']} min median reply time.")
+    ghosts = analyses.get("ghosting", {})
+    if ghosts:
+        worst = max(ghosts.items(), key=lambda kv: kv[1])
+        out.append(f"{worst[0]} holds the longest silent streak ({worst[1]} days).")
+    mono = analyses.get("monologues", {})
+    if mono and mono["per_member_longest"]:
+        top_mono = mono["per_member_longest"].most_common(1)[0]
+        out.append(f"{top_mono[0]} once went on a {top_mono[1]}-message solo run.")
+    pm = analyses.get("pair_matrices")
+    if pm:
+        best_pair = max(((a, b, c) for a, row in pm["reply"].items()
+                         for b, c in row.items()), key=lambda x: x[2], default=None)
+        if best_pair:
+            out.append(f"{best_pair[0]} replies to {best_pair[1]} more than anyone "
+                       f"({best_pair[2]} times).")
+    senti = analyses.get("sentiment")
+    if senti and senti["per_member"]:
+        best = max(senti["per_member"].items(), key=lambda kv: kv[1])
+        out.append(f"Best vibes come from {best[0]} ({best[1]:+.2f} avg sentiment).")
+    ex = analyses.get("extremes")
+    if ex:
+        out.append(f"The record day was {ex['record_day']} with "
+                   f"{ex['record_day_count']} messages.")
+    return out
+
+
+CHART_CAPTIONS = {
+    "messages_by_year.png": "Messages per year",
+    "activity_by_hour.png": "When the chat is alive, by hour",
+    "activity_by_weekday.png": "Busiest days of the week",
+    "activity_heatmap.png": "Day-by-day activity calendar",
+    "pace_trends.png": "Rolling average messages per day",
+    "monthly_timeline.png": "Messages per month over the years",
+    "top_members.png": "Who talks the most",
+    "top_words.png": "Favorite words",
+    "top_emojis.png": "Favorite emojis",
+    "wordcloud.png": "Overall word cloud",
+    "yearly_recap.png": "Year-by-year recap",
+    "reactions_given.png": "Who reacts the most",
+    "most_reacted.png": "The most-reacted messages",
+    "reaction_matrix.png": "Who reacts to whose messages",
+    "response_speed.png": "Median time to reply",
+    "reply_matrix.png": "Who replies to whom",
+    "reply_chains.png": "Longest reply chains",
+    "hourly_radar.png": "Hourly activity profiles",
+    "conversation_starters.png": "Who starts conversations",
+    "ghosting.png": "Longest silent streaks",
+    "monologues.png": "Longest solo runs",
+    "swear_by_member.png": "Swear words per member",
+    "swear_over_time.png": "Swearing over the years",
+    "tracked_terms.png": "Custom tracked terms per year",
+    "sentiment_per_member.png": "Average mood per member",
+    "sentiment_over_time.png": "Mood over the years",
+    "length_trends.png": "Average message length",
+    "word_trends.png": "Top words over time",
+    "top_domains.png": "Most shared domains",
+    "media_leaderboard.png": "Media sent per member",
+    "media_by_year.png": "Media per year",
+    "calls_over_time.png": "Calls per month",
+    "unsent.png": "Unsent messages per member",
+}
+
+
+def _sec(sid, title, inner):
+    return f'<section id="{sid}"><h2>{title}</h2>{inner}</section>'
+
+
+def _thead(columns):
+    return "<thead><tr>" + "".join(f"<th>{html_lib.escape(c)}</th>" for c in columns) + "</tr></thead>"
+
+
+def _table(columns, rows):
+    body = "<tbody>" + "".join("<tr>" + "".join(f"<td>{r}</td>" for r in row) + "</tr>"
+                               for row in rows) + "</tbody>"
+    return f"<table>{_thead(columns)}{body}</table>"
+
+
 def write_report_html(title, stats, analyses, out_dir, anonymized, dates):
     charts = sorted(out_dir.glob("*.png"))
     imgs = "".join(
-        f'<figure><img src="data:image/png;base64,{_base64_png(c)}" '
-        f'alt="{html_lib.escape(c.name)}"/><figcaption>{html_lib.escape(c.name)}</figcaption></figure>'
+        f'<figure><img loading="lazy" src="data:image/png;base64,{_base64_png(c)}" '
+        f'alt="{html_lib.escape(c.name)}"/>'
+        f"<figcaption>{html_lib.escape(CHART_CAPTIONS.get(c.name, c.name))}</figcaption></figure>"
         for c in charts
     )
     react = analyses["reactions"]
     senti = analyses.get("sentiment")
     ex = analyses.get("extremes")
-    leader_rows = "".join(
-        f"<tr><td>{html_lib.escape(m)}</td><td>{c:,}</td>"
-        f"<td>{100 * c / max(1, stats['total']):.1f}%</td></tr>"
-        for m, c in stats["member_msgs"].most_common(10)
-    )
-    reactor_rows = "".join(
-        f"<tr><td>{html_lib.escape(m)}</td><td>{c:,}</td></tr>"
-        for m, c in react["reactor"].most_common(10)
-    )
+
+    leader_rows = [(html_lib.escape(m), f"{c:,}", f"{100 * c / max(1, stats['total']):.1f}%")
+                   for m, c in stats["member_msgs"].most_common(10)]
+    reactor_rows = [(html_lib.escape(m), f"{c:,}") for m, c in react["reactor"].most_common(10)]
+
+    sections = []
+    sections.append(_sec("highlights", "Highlights",
+                         "<ul>" + "".join(f"<li>{html_lib.escape(i)}</li>"
+                                          for i in insights(stats, analyses)) + "</ul>"))
+    sections.append(_sec("leaderboard", "Leaderboard",
+                         _table(["Member", "Messages", "Share"], leader_rows)))
+    sections.append(_sec("reactive", "Most reactive",
+                         _table(["Reactor", "Reactions"], reactor_rows)))
+
+    pm = analyses.get("pair_matrices")
+    if pm:
+        rows = []
+        for a in pm["members"]:
+            row = [html_lib.escape(a)]
+            for b in pm["members"]:
+                n = pm["reply"][a].get(b, 0)
+                row.append(str(n))
+            rows.append(row)
+        sections.append(_sec("pair_dynamics", "Pair dynamics",
+                             _table(["Replier \\n Replied-to"] + [html_lib.escape(m) for m in pm["members"]], rows)))
+    mono = analyses.get("monologues")
+    if mono and mono["per_member_longest"]:
+        rows = [(html_lib.escape(m), str(n))
+                for m, n in mono["per_member_longest"].most_common(10)]
+        sections.append(_sec("monologues", "Monologues",
+                             _table(["Member", "Longest solo run"], rows)))
+
     weird_items = "".join(
         f"<li><b>{html_lib.escape(s['member'])}</b> ({s['dt'].strftime('%Y-%m-%d %H:%M')}) "
         f"[{html_lib.escape(', '.join(s['reasons']))}] "
         f'"{html_lib.escape(s["snippet"])}"</li>'
         for s in analyses["weird"]
     )
-    sentiment_block = ""
-    if senti:
-        rows = "".join(
-            f"<tr><td>{html_lib.escape(m)}</td><td>{score:+.3f}</td></tr>"
-            for m, score in sorted(senti["per_member"].items(), key=lambda kv: -kv[1])
-        )
-        sentiment_block = (f"<h2>Sentiment</h2>"
-                           f"<p class='muted'>Scored {senti['messages_scored']} messages; "
-                           f"English-only VADER, may be noisy on mixed-language chat.</p>"
-                           f"<table><tr><th>Member</th><th>Avg</th></tr>{rows}</table>")
+    if weird_items:
+        sections.append(_sec("weirdest", "Weirdest statements", f"<ul>{weird_items}</ul>"))
+
     extremes_block = ""
     if ex:
         bits = []
@@ -1218,10 +1678,33 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates):
             bits.append(f"Most-reacted: <b>{html_lib.escape(ex['most_reacted']['sender'])}</b> "
                         f"({len(ex['most_reacted']['reactions'])} reactions) "
                         f'"{html_lib.escape(_shorten(ex["most_reacted"]["content"], 80))}"')
-        bits.append(f"Record day: <b>{ex['record_day']}</b> ({ex['record_day_count']} messages)")
-        extremes_block = "<h2>Extremes</h2>" + "<p>".join(f"{b}</p>" for b in bits)
+        bits.append(f"Record day: <b>{ex['record_day']}</b> "
+                    f"({ex['record_day_count']} messages)")
+        extremes_block = "<p>" + "</p><p>".join(bits) + "</p>"
+        sections.append(_sec("extremes", "Extremes", extremes_block))
 
-    body = f"""<h1>{html_lib.escape(title)} flashback</h1>
+    if senti:
+        rows = [(html_lib.escape(m), f"{score:+.3f}")
+                for m, score in sorted(senti["per_member"].items(), key=lambda kv: -kv[1])]
+        sections.append(_sec("sentiment", "Sentiment",
+                             f"<p class='muted'>Scored {senti['messages_scored']} messages; "
+                             f"English-only VADER, may be noisy on mixed-language chat.</p>"
+                             + _table(["Member", "Avg sentiment"], rows)))
+    sections.append(_sec("charts", "Charts", imgs))
+
+    nav = "".join(
+        f'<a href="#{sid}">{html_lib.escape(label)}</a>'
+        for sid, label in [("highlights", "Highlights"), ("leaderboard", "Leaderboard"),
+                           ("reactive", "Reactive"), ("pair_dynamics", "Pairs"),
+                           ("monologues", "Monologues"), ("weirdest", "Weirdest"),
+                           ("extremes", "Extremes"), ("sentiment", "Sentiment"),
+                           ("charts", "Charts")]
+    )
+    body = f"""<div class="topbar"><span class="brand">{html_lib.escape(title)} flashback</span>
+<nav>{nav}</nav>
+<button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
+<main>
+<h1>{html_lib.escape(title)} flashback</h1>
 <p class="muted">Generated {datetime.now().strftime('%Y-%m-%d %H:%M')}
 {"(names anonymized)" if anonymized else ""}</p>
 <div class="cards">
@@ -1233,28 +1716,63 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates):
 <div class="card"><b>{stats['media']}</b><span>media</span></div>
 <div class="card"><b>{stats['calls']}</b><span>calls</span></div>
 </div>
-<h2>Leaderboard</h2><table><tr><th>Member</th><th>Messages</th><th>Share</th></tr>{leader_rows}</table>
-<h2>Most reactive</h2><table><tr><th>Reactor</th><th>Reactions</th></tr>{reactor_rows}</table>
-{f"<h2>Weirdest statements</h2><ul>{weird_items}</ul>" if weird_items else ""}
-{extremes_block}
-{sentiment_block}
-<h2>Charts</h2>{imgs}"""
+{''.join(sections)}
+</main>"""
     doc = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html_lib.escape(title)} flashback</title>
 <style>
-body{{font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:1000px;margin:0 auto;padding:24px;color:#222;background:#fff}}
-h1{{font-size:26px;margin-bottom:4px}}h2{{font-size:20px;margin-top:32px;border-bottom:1px solid #eee;padding-bottom:6px}}
-.muted{{color:#777;margin-top:0}}p{{font-size:14px}}
+:root{{--bg:#ffffff;--fg:#202124;--muted:#777;--card:#f7f8fa;--border:#e3e5e8;--accent:#5b8ff9}}
+[data-theme="dark"]{{--bg:#17191f;--fg:#e8e8e8;--muted:#9aa0a6;--card:#20242d;--border:#2a2f3a}}
+*{{box-sizing:border-box}}
+html{{scroll-behavior:smooth}}
+body{{font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;padding:0 0 60px;color:var(--fg);background:var(--bg);line-height:1.5}}
+.topbar{{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:8px 20px;background:var(--card);border-bottom:1px solid var(--border);flex-wrap:wrap}}
+.brand{{font-weight:700;font-size:15px}}
+nav{{display:flex;gap:4px;flex-wrap:wrap;flex:1}}
+nav a{{color:var(--muted);text-decoration:none;font-size:12px;padding:4px 8px;border-radius:6px}}
+nav a:hover{{background:var(--border);color:var(--fg)}}
+#theme{{margin-left:auto;border:1px solid var(--border);background:var(--bg);color:var(--fg);border-radius:6px;padding:4px 10px;cursor:pointer}}
+main{{max-width:1040px;margin:0 auto;padding:0 20px}}
+h1{{font-size:26px;margin-bottom:4px}}
+h2{{font-size:20px;margin-top:36px;border-bottom:1px solid var(--border);padding-bottom:6px}}
+.muted{{color:var(--muted);font-size:13px}}
 .cards{{display:flex;flex-wrap:wrap;gap:12px;margin:20px 0}}
-.card{{background:#f7f8fa;border:1px solid #e3e5e8;border-radius:8px;padding:12px 16px;min-width:110px}}
-.card b{{display:block;font-size:22px}} .card span{{color:#777;font-size:12px}}
-table{{border-collapse:collapse;width:100%;margin:8px 0}}
-th,td{{text-align:left;padding:6px 10px;border-bottom:1px solid #eee;font-size:14px}}
-th{{color:#777;font-weight:600}}
-figure{{margin:16px 0}} img{{max-width:100%;border:1px solid #eee;border-radius:8px}}
-figcaption{{color:#777;font-size:12px;margin-top:4px}}li{{margin:6px 0;font-size:14px}}
-</style></head><body>{body}</body></html>"""
+.card{{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:110px}}
+.card b{{display:block;font-size:22px}} .card span{{color:var(--muted);font-size:12px}}
+table{{border-collapse:collapse;width:100%;margin:10px 0;font-size:14px}}
+th,td{{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border)}}
+th{{color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap}}
+th.sort-asc::after{{content:" \\25b2";font-size:9px}} th.sort-desc::after{{content:" \\25bc";font-size:9px}}
+.tfilter{{margin:8px 0 2px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);width:220px}}
+.charts{{display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:22px}}
+figure{{margin:0;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px}}
+figure img{{max-width:100%;border-radius:6px;display:block}}
+figcaption{{color:var(--muted);font-size:12px;margin-top:8px}}
+li{{margin:6px 0;font-size:14px}}
+@media(prefers-color-scheme:dark){{:root:not([data-theme]){{--bg:#17191f;--fg:#e8e8e8;--muted:#9aa0a6;--card:#20242d;--border:#2a2f3a}}}}
+</style></head><body>{body}
+<script>
+(function(){{var r=document.documentElement,b=document.getElementById('theme');
+function apply(t){{if(t==='dark'){{r.setAttribute('data-theme','dark');b.textContent='Light';}}else{{r.removeAttribute('data-theme');b.textContent='Dark';}}}}
+if(localStorage.getItem('cf-theme'))apply(localStorage.getItem('cf-theme'));
+b.addEventListener('click',function(){{var t=r.getAttribute('data-theme')==='dark'?'light':'dark';apply(t);localStorage.setItem('cf-theme',t);}});
+document.querySelectorAll('table').forEach(function(t){{var tb=t.tBodies[0];
+var box=document.createElement('input');box.placeholder='Filter rows';box.className='tfilter';
+t.parentNode.insertBefore(box,t);
+box.addEventListener('input',function(){{var q=box.value.toLowerCase();
+Array.prototype.forEach.call(tb.rows,function(tr){{tr.style.display=tr.innerText.toLowerCase().indexOf(q)>=0?'':'none';}});}});
+var ths=t.querySelectorAll('th');
+ths.forEach(function(th,i){{th.addEventListener('click',function(){{var rows=Array.prototype.slice.call(tb.rows);
+var num=rows.every(function(tr){{return tr.cells[i]&&!isNaN(parseFloat(tr.cells[i].textContent.replace(/[^0-9.-]/g,'')))&&tr.cells[i].textContent.trim()!=='';}});
+var dir=th.getAttribute('data-dir')==='asc'?-1:1;th.setAttribute('data-dir',dir===1?'asc':'desc');
+ths.forEach(function(x){{x.classList.remove('sort-asc','sort-desc');}});th.classList.add(dir===1?'sort-asc':'sort-desc');
+rows.sort(function(a,b){{var av=a.cells[i].textContent.trim(),bv=b.cells[i].textContent.trim();
+return num?(parseFloat(av)-parseFloat(bv))*dir:av.localeCompare(bv)*dir;}});
+rows.forEach(function(tr){{tb.appendChild(tr);}});}});}});}});
+}})();
+</script></body></html>"""
     (out_dir / "report.html").write_text(doc, encoding="utf-8")
 
 
@@ -1337,6 +1855,30 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates):
                       "most_reacted": _js_msg(ex["most_reacted"]),
                       "record_day": str(ex["record_day"]), "record_day_count": ex["record_day_count"]}
                      if ex else None),
+        "heatmap": ({"active_days": analyses["heatmap"]["active_days"],
+                     "max_day": analyses["heatmap"]["max_day"]}
+                    if analyses.get("heatmap") else None),
+        "pace": ({"avg_per_active_day": round(sum(analyses["pace"]["counts"]) /
+                                             len(analyses["pace"]["days"]), 2),
+                  "calls_by_month": dict(analyses["pace"]["calls_by_month"]),
+                  "media_by_year": dict(analyses["pace"]["media_by_year"])}
+                 if analyses.get("pace") and analyses["pace"]["days"] else None),
+        "pair_matrices": ({"members": analyses["pair_matrices"]["members"],
+                           "reply": {a: dict(row) for a, row in analyses["pair_matrices"]["reply"].items()},
+                           "reaction": {a: dict(row) for a, row in analyses["pair_matrices"]["reaction"].items()}}
+                          if analyses.get("pair_matrices") else None),
+        "hourly_profiles": (analyses["radar"] if analyses.get("radar") else None),
+        "wordcloud": ({"overall": [{"word": w, "count": c} for w, c in
+                                   analyses["wordcloud"]["overall"].most_common(50)],
+                       "per_member": {m: [{"word": w, "count": c} for w, c in
+                                          cnt.most_common(20)]
+                                      for m, cnt in analyses["wordcloud"]["per_member"].items()}}
+                      if analyses.get("wordcloud") else None),
+        "monologues": ({"email_moments": analyses["monologues"]["email_moments"],
+                        "longest_run_len": analyses["monologues"]["longest_run_len"],
+                        "per_member_longest": dict(analyses["monologues"]["per_member_longest"])}
+                       if analyses.get("monologues") else None),
+        "unsent": dict(analyses["unsent"]) if analyses.get("unsent") else None,
     }
     if analyses.get("track"):
         payload["tracked_terms"] = {t: {"count": d["count"],
@@ -1375,6 +1917,19 @@ def console_summary(title, stats, analyses, dates):
     swear = analyses["swear"]
     if swear["total_hits"]:
         print(f"  Swear messages: {swear['total_hits']}")
+    mono = analyses.get("monologues")
+    if mono and mono["per_member_longest"]:
+        top_mono = mono["per_member_longest"].most_common(1)[0]
+        print(f"  Longest solo run: {top_mono[0]} ({top_mono[1]} msgs in a row)")
+    pm = analyses.get("pair_matrices")
+    if pm:
+        best_pair = max(((a, b, c) for a, row in pm["reply"].items()
+                         for b, c in row.items()), key=lambda x: x[2], default=None)
+        if best_pair:
+            print(f"  Reply buddy: {best_pair[0]} -> {best_pair[1]} ({best_pair[2]}x)")
+    unsent = analyses.get("unsent")
+    if unsent and any(unsent.values()):
+        print(f"  Unsent messages: {sum(unsent.values())}")
 
 
 def load_track_file(path):
@@ -1437,6 +1992,13 @@ def process_thread(thread_dir, args):
         "ghosting": ghosting(msgs),
         "extremes": extremes(msgs),
         "sentiment": sentiment_analysis(msgs),
+        "heatmap": activity_heatmap(msgs),
+        "pace": pace_trends(msgs),
+        "pair_matrices": pair_matrices(msgs),
+        "radar": hourly_radar(msgs),
+        "wordcloud": word_cloud_data(msgs),
+        "monologues": monologues(msgs),
+        "unsent": unsent_stats(msgs),
     }
 
     out_dir = Path(args.output) / _slug(title)
@@ -1457,10 +2019,37 @@ def _slug(name):
     return re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_").lower() or "thread"
 
 
+def serve(thread_dirs, args):
+    from chat_ui import run_server
+    threads = []
+    for d in thread_dirs:
+        loaded = load_thread(d)
+        if loaded is None:
+            continue
+        title, participants, raw = loaded
+        msgs = normalize_messages(raw)
+        if not msgs:
+            print(f"  [skip] {d}: no usable messages")
+            continue
+        if args.anonymize:
+            apply_anonymization(msgs, anonymize_map(msgs))
+        threads.append({"slug": _slug(title), "title": title,
+                        "thread_dir": d, "msgs": msgs})
+    if not threads:
+        print("[error] no readable threads to serve")
+        return 1
+    print(f"\nStarting local chat reader on http://127.0.0.1:{args.port} "
+          f"(localhost only)")
+    run_server(threads, args.port, args.output)
+    return 0
+
+
 def run(args):
     thread_dirs = find_thread_dirs(args.input)
     if not thread_dirs:
         return 1
+    if args.serve:
+        return serve(thread_dirs, args)
     if len(thread_dirs) > 1:
         print(f"Found {len(thread_dirs)} threads:")
         for d in thread_dirs[:20]:
@@ -1498,6 +2087,10 @@ def main(argv=None):
                         help="Number of entries in leaderboards (default: 10)")
     parser.add_argument("--json", action="store_true",
                         help="Also write summary.json with the same data as the report")
+    parser.add_argument("--serve", action="store_true",
+                        help="Start the local chat reader web UI instead of writing reports")
+    parser.add_argument("--port", type=int, default=8080,
+                        help="Port for --serve (default: 8080)")
     args = parser.parse_args(argv)
     return run(args)
 

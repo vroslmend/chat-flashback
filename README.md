@@ -3,7 +3,8 @@
 Analyzes a Facebook Messenger export and generates reports about a group chat:
 yearly recaps, member personalities, reaction dynamics, response-speed leaderboards,
 swear-word stats, custom term tracking, conversation starters, reply chains, ghosting
-stats, sentiment, and a weirdest statements section.
+stats, sentiment, word clouds, and a weirdest statements section. Also ships a local
+web UI to read the chat like a messaging app.
 
 Runs locally. Your data is not uploaded anywhere.
 
@@ -18,10 +19,17 @@ Runs locally. Your data is not uploaded anywhere.
 - Conversation starters. Sessions split on 30-minute gaps, longest single back-and-forth.
 - Reply chains. Longest reply chains reconstructed from `reply_to_message_id`.
 - Ghosting stats. Longest silence between each member's own messages.
+- Activity heatmap. GitHub-style calendar grid plus pace trends (messages/day, calls, media).
+- Pair dynamics. Heatmaps of who replies to whom and who reacts to whose messages.
+- Hourly radar profiles. Each member's 24-hour activity shape.
+- Word clouds. Overall and per-member, generated with `wordcloud`.
+- Monologues and unsent messages. Longest solo runs ("could've been an email") and `is_unsent`.
 - Message-length and word trends over time.
 - Sentiment (VADER). Average mood per member and per year.
 - Weirdest statements. All-caps, 3am, punctuation-spiral, and extreme-length messages.
-- Self-contained `report.html` with all charts embedded (share one file).
+- Self-contained `report.html` with all charts embedded (share one file). Sticky nav,
+  dark/light toggle, and filterable, sortable tables.
+- Local chat reader (`--serve`). Browse the chat in a Messenger-style web UI.
 - `--anonymize`. Replaces names with Person A, Person B in all output.
 - Supports group and 1-on-1 chats. Detects multiple threads in one export.
 
@@ -33,9 +41,9 @@ Python 3.8+.
 pip install -r requirements.txt
 ```
 
-`vaderSentiment` powers the sentiment section. If it is not installed the tool
-still runs and simply skips sentiment. Sentiment is English-only and may be noisy
-on mixed-language chats.
+Optional extras that the tool skips gracefully if missing:
+- `vaderSentiment` powers sentiment (English-only, may be noisy on mixed-language chats).
+- `wordcloud` powers the word clouds.
 
 ## Usage
 
@@ -55,8 +63,29 @@ Options:
 | `--year` | Analyze only one year, e.g. `--year 2017` |
 | `--top` | Number of entries in leaderboards (default: 10) |
 | `--json` | Also write `summary.json` with the report data as structured JSON |
+| `--serve` | Start the local chat reader web UI instead of writing reports |
+| `--port` | Port for `--serve` (default: 8080) |
 
 Writes `summary.md`, `report.html`, and PNG charts into `output/<thread>/`.
+
+## Chat reader
+
+```bash
+python analyze_chat.py --input <thread> --serve
+```
+
+Starts a local server on `127.0.0.1:8080` (localhost only, no authentication) and
+opens a Messenger-style reader:
+
+- Infinite-scroll feed grouped by day, newest or oldest first
+- Sender color chips, inline reactions, media thumbnails, shares and call messages
+- Reply threading, "N years ago" badges, subtle sentiment tint
+- Debounced full-text search and per-member filters
+- A jump-to-date control and a link to the full report
+
+Media files are served from the export folder only; paths are resolved inside the
+thread directory so nothing outside it can be read. Search is a simple substring
+scan over the messages, so it is fast enough for everyday use on large chats.
 
 ## Getting your Messenger data
 
@@ -74,6 +103,7 @@ A thread folder contains `message_1.json`, `message_2.json`, ... that you can po
 - All processing happens locally.
 - `--anonymize` replaces real names in every chart and report, including names that
   appear inside quoted message text.
+- `--serve` binds to `127.0.0.1` only, so the reader is never reachable from the network.
 - `.gitignore` excludes `data/` and `output/` so an export cannot be committed.
 
 ## Sample data
@@ -98,20 +128,21 @@ Sample output from the synthetic thread is in `examples/`:
 - `example_summary.md` - a full generated report
 - `report.html` - the same report as a single self-contained HTML file
 - `summary.json` - the report data as structured JSON
-- PNG charts: messages per year, activity by hour/weekday, top members, top words,
-  yearly recap, reaction dynamics, response speed, swear stats, tracked terms,
-  domains, media, reply chains, ghosting, conversation starters, monthly timeline,
-  word trends, and sentiment
+- PNG charts: messages per year, activity heatmap, pace trends, activity by
+  hour/weekday, top members, top words, word clouds, yearly recap, pair dynamics,
+  hourly radar, reaction dynamics, response speed, swear stats, tracked terms,
+  domains, media, reply chains, ghosting, monologues, conversation starters,
+  monthly timeline, word trends, and sentiment
 
-![Messages per year](examples/messages_by_year.png)
+![Activity heatmap](examples/activity_heatmap.png)
 
-![Yearly recap: messages and top member](examples/yearly_recap.png)
-
-![Most-reacted messages](examples/most_reacted.png)
-
-![Reply chains](examples/reply_chains.png)
+![Reply matrix](examples/reply_matrix.png)
 
 ![Monthly timeline](examples/monthly_timeline.png)
+
+![Hourly radar](examples/hourly_radar.png)
+
+![Word cloud](examples/wordcloud.png)
 
 ## License
 
