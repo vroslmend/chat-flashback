@@ -5,6 +5,8 @@ from pathlib import Path
 
 from chat_ui import run_server
 
+from server_utils import wait_for_server
+
 import analyze_chat as ac
 
 SAMPLE = str(Path(__file__).resolve().parents[1] / "sample_data")
@@ -26,6 +28,7 @@ def test_server_endpoints(tmp_path):
     sock.close()
     server = threading.Thread(target=run_server, args=(threads, port, tmp_path), daemon=True)
     server.start()
+    wait_for_server(port)
 
     import urllib.request
     from urllib.parse import quote

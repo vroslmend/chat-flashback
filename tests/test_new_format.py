@@ -144,6 +144,8 @@ def test_reader_serves_year_page(tmp_path):
     import chat_ui
     import analyze_chat as ac
 
+    from server_utils import wait_for_server
+
     out = tmp_path / "out"
     code = ac.main(["--input", SAMPLE, "--output", str(out)])
     assert code == 0
@@ -161,6 +163,7 @@ def test_reader_serves_year_page(tmp_path):
     server = threading.Thread(target=chat_ui.run_server, args=(threads, port, out),
                               daemon=True)
     server.start()
+    wait_for_server(port)
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/t/saturday_squad/year/2017") as r:
         body = r.read().decode("utf-8")
     assert "2017 in review" in body
