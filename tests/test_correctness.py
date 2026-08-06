@@ -277,6 +277,23 @@ def test_messenger_boilerplate_is_not_treated_as_vocabulary():
     assert ac.core_stats(msgs)["words"]["attachment"] == 0
 
 
+def test_reaction_notice_boilerplate_counts_as_neither_words_nor_emoji():
+    """"<nickname> reacted <emoji> to your message" is written by Messenger, so
+    the nickname is not a phrase anyone said and the emoji was not typed."""
+    msgs = [mk("Alice", BASE + timedelta(minutes=i),
+               "speed racer reacted \U0001f606 to your message ") for i in range(10)]
+    msgs += [mk("Bob", BASE + timedelta(minutes=100), "everyone reacted well \U0001f600")]
+    ac.add_derived_fields(msgs)
+    assert msgs[0]["tokens"] == ()
+    assert msgs[0]["emojis"] == ()
+    # A real message that happens to use the word "reacted" is untouched.
+    assert "reacted" in msgs[-1]["tokens"]
+    assert msgs[-1]["emojis"] == ("\U0001f600",)
+    stats = ac.core_stats(msgs)
+    assert stats["words"]["racer"] == 0
+    assert stats["emojis"]["\U0001f606"] == 0
+
+
 def test_stopwords_file_extends_the_builtin_list(tmp_path):
     words = tmp_path / "extra.txt"
     words.write_text("# comment\nhai\nnahi\n\n", encoding="utf-8")

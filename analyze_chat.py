@@ -91,8 +91,13 @@ URL_RE = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
 # "X sent an attachment." shows up thousands of times and reads as vocabulary.
 # The message still counts; only its text is boilerplate rather than typed.
 BOILERPLATE_RE = re.compile(
-    r"^.{1,60}? sent (an attachment|a photo|a video|a sticker|a voice message|"
-    r"a link|a gif)\.?\s*$", re.IGNORECASE)
+    r"^.{1,80}? sent (an attachment|a photo|a video|a sticker|a voice message|"
+    r"a link|a gif)\.?\s*$"
+    # "<nickname> reacted <emoji> to your message". The nickname is free text
+    # and often contains emoji itself, so both the words and the emoji in these
+    # would otherwise be counted as something a member typed.
+    r"|^.{1,80}? reacted .{0,20}? to your message\.?\s*$",
+    re.IGNORECASE)
 
 PALETTE = ["#5b8ff9", "#5ad8a6", "#f6bd16", "#e8684a", "#6dc8ec", "#9270ca",
            "#ff9d4d", "#269a99", "#ff99c3", "#9fe6b8"]
@@ -361,9 +366,9 @@ def add_derived_fields(msgs):
     the empty tuple. Must run after any anonymization, which rewrites content.
     """
     for m in msgs:
-        content = m["content"]
+        content = _words_only(m["content"])
         if content:
-            m["tokens"] = tuple(sys.intern(w) for w in tokenize(_words_only(content)))
+            m["tokens"] = tuple(sys.intern(w) for w in tokenize(content))
             m["emojis"] = tuple(sys.intern(e) for e in split_emojis(content))
         else:
             m["tokens"] = ()
@@ -391,7 +396,7 @@ def _tokens(m):
 
 def _emojis(m):
     cached = m.get("emojis")
-    return cached if cached is not None else tuple(split_emojis(m["content"]))
+    return cached if cached is not None else tuple(split_emojis(_words_only(m["content"])))
 
 
 def _median(sorted_values):
