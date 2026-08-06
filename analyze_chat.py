@@ -3390,7 +3390,7 @@ def serve(thread_dirs, args):
         return 1
     print(f"\nStarting local chat reader on http://127.0.0.1:{args.port} "
           f"(localhost only)")
-    run_server(threads, args.port, args.output)
+    run_server(threads, args.port, args.output, build_index=not args.no_index)
     return 0
 
 
@@ -3677,6 +3677,9 @@ def main(argv=None):
                         help="Start the local chat reader web UI instead of writing reports")
     parser.add_argument("--port", type=int, default=8080,
                         help="Port for --serve (default: 8080)")
+    parser.add_argument("--no-index", action="store_true",
+                        help="Skip building the word-search index when serving. "
+                             "Starts faster; the word explorer is unavailable")
     parser.add_argument("--tz", default="",
                         help="Timezone for analysis, e.g. +03:00 or America/New_York "
                              "(Messenger timestamps are UTC; default is your system timezone)")

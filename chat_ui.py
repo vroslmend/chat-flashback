@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 import analyze_chat as ac
+from wordindex import WordIndex
 
 _PAGE_SIZE = 400
 
@@ -27,7 +28,7 @@ def _snippet(text, n=90):
 
 
 class ThreadIndex:
-    def __init__(self, slug, title, thread_dir, msgs):
+    def __init__(self, slug, title, thread_dir, msgs, build_index=True):
         self.slug = slug
         self.title = title
         self.thread_dir = Path(thread_dir)
@@ -49,6 +50,10 @@ class ThreadIndex:
             dt = m["dt"]
             self.by_monthday.setdefault((dt.month, dt.day), []).append(i)
         self._sent_cache = {}
+        # The word explorer's inverted index. Built here rather than lazily so
+        # the cost lands at startup, where it is announced, instead of on the
+        # first search.
+        self.words = WordIndex(msgs) if build_index else None
 
     def to_json(self, idx):
         m = self.msgs[idx]
@@ -286,6 +291,10 @@ def make_handler(threads, output_dir):
                         return self._day(thread, query)
                     if len(sub) >= 2 and sub[1] == "random":
                         return self._json(thread.random_memory())
+                    if len(sub) >= 2 and sub[1] == "word":
+                        return self._word(thread, query)
+                    if len(sub) >= 2 and sub[1] == "suggest":
+                        return self._word_suggest(thread, query)
                     return self._json(thread.meta())
                 if sub[0] == "report.html":
                     report = output_dir / slug / "report.html"
@@ -350,6 +359,22 @@ your machine.</p>
             except (ValueError, IndexError):
                 return self._send(400, "date must be YYYY-MM-DD")
             return self._json(thread.day(month, day))
+
+        def _word(self, thread, query):
+            if thread.words is None:
+                return self._json({"error": "index disabled"}, 503)
+            q = (query.get("q") or [""])[0]
+            fold = (query.get("variants") or ["0"])[0] == "1"
+            profile = thread.words.profile(q, fold_variants=fold)
+            if profile is None:
+                return self._json({"error": "not found", "word": q}, 404)
+            return self._json(profile)
+
+        def _word_suggest(self, thread, query):
+            if thread.words is None:
+                return self._json({"words": []})
+            q = (query.get("q") or [""])[0]
+            return self._json({"words": thread.words.suggest(q)})
 
     return Handler
 
@@ -530,9 +555,13 @@ loadMore();});
 </script></body></html>"""
 
 
-def run_server(threads, port, output_dir):
-    indexed = {t["slug"]: ThreadIndex(t["slug"], t["title"], t["thread_dir"], t["msgs"])
-               for t in threads}
+def run_server(threads, port, output_dir, build_index=True):
+    indexed = {}
+    for t in threads:
+        if build_index:
+            print(f"  Indexing {t['title']} for word search...", flush=True)
+        indexed[t["slug"]] = ThreadIndex(t["slug"], t["title"], t["thread_dir"],
+                                         t["msgs"], build_index=build_index)
     handler = make_handler(indexed, Path(output_dir))
     server = ThreadingHTTPServer(("127.0.0.1", port), handler)
     for t in indexed.values():
