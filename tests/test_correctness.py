@@ -290,9 +290,44 @@ def test_resolve_media_path_rejects_paths_outside_the_thread(tmp_path):
     outside = tmp_path / "secret.txt"
     outside.write_text("secret", encoding="utf-8")
 
-    assert ac._resolve_media_path(thread, "photos/ok.jpg") == inside.resolve()
-    assert ac._resolve_media_path(thread, str(outside.resolve())) is None
-    assert ac._resolve_media_path(thread, "../secret.txt") is None
+    assert ac.resolve_media_path(thread, "photos/ok.jpg") == inside.resolve()
+    assert ac.resolve_media_path(thread, str(outside.resolve())) is None
+    assert ac.resolve_media_path(thread, "../secret.txt") is None
+
+
+def test_resolve_media_path_handles_root_relative_uris(tmp_path):
+    """Real exports store uris relative to the export root, not the thread."""
+    thread = tmp_path / "your_facebook_activity" / "messages" / "inbox" / "groupchat_123"
+    (thread / "photos").mkdir(parents=True)
+    (thread / "photos" / "x.jpg").write_bytes(b"x")
+    uri = "your_facebook_activity/messages/inbox/groupchat_123/photos/x.jpg"
+    assert ac.resolve_media_path(thread, uri) == (thread / "photos" / "x.jpg").resolve()
+
+
+def test_resolve_media_path_handles_a_renamed_thread_folder(tmp_path):
+    thread = tmp_path / "renamed"
+    (thread / "gifs").mkdir(parents=True)
+    (thread / "gifs" / "g.gif").write_bytes(b"g")
+    uri = "your_facebook_activity/messages/inbox/groupchat_123/gifs/g.gif"
+    assert ac.resolve_media_path(thread, uri) == (thread / "gifs" / "g.gif").resolve()
+
+
+def test_check_finds_media_with_root_relative_uris(tmp_path, capsys):
+    thread = tmp_path / "your_facebook_activity" / "messages" / "inbox" / "groupchat_123"
+    (thread / "photos").mkdir(parents=True)
+    (thread / "photos" / "x.jpg").write_bytes(b"x")
+    uri = "your_facebook_activity/messages/inbox/groupchat_123/photos/x.jpg"
+    (thread / "message_1.json").write_text(json.dumps({
+        "title": "groupchat", "messages": [
+            {"id": "1", "sender_name": "Alice", "timestamp_ms": 1609459200000,
+             "photos": [{"uri": uri}]},
+            {"id": "2", "sender_name": "Bob", "timestamp_ms": 1609459200001,
+             "photos": [{"uri": uri.replace("x.jpg", "gone.jpg")}]},
+        ]}), encoding="utf-8")
+    assert ac.main(["--input", str(thread), "--output", str(tmp_path / "out"),
+                    "--check"]) == 0
+    out = capsys.readouterr().out
+    assert "media attachments: 2 | missing on disk: 1" in out, out
 
 
 def test_incremental_rerun_when_track_file_changes(tmp_path, capsys):

@@ -2910,16 +2910,23 @@ def _message_media_uris(m):
             yield item["uri"]
 
 
-def _resolve_media_path(thread_dir, uri):
+def resolve_media_path(thread_dir, uri):
     """Resolve an export's media uri to a file inside the thread folder.
 
-    Absolute uris are still resolved relative to the thread: an export that
-    names a path outside it must not be reported as present, or --check would
-    vouch for a file it never actually read.
+    Real Messenger exports store uris relative to the *export root*, like
+    "your_facebook_activity/messages/inbox/<thread>/photos/x.jpg", while the
+    tool is pointed at the thread folder itself. Leading path segments are
+    dropped one at a time until the tail lands on a real file, which resolves
+    root-relative and thread-relative uris alike, and keeps working if the
+    thread folder has been renamed.
+
+    The result must still sit inside the thread folder, so an export naming a
+    path outside it resolves to nothing rather than being read.
     """
     base = thread_dir.resolve()
-    for candidate in (uri, uri.lstrip("/\\")):
-        p = (base / candidate).resolve()
+    parts = [p for p in uri.replace("\\", "/").split("/") if p and p != "."]
+    for i in range(len(parts)):
+        p = base.joinpath(*parts[i:]).resolve()
         if p.is_file() and base in p.parents:
             return p
     return None
@@ -2993,7 +3000,7 @@ def check_thread(thread_dir, args):
                 empty += 1
             for uri in _message_media_uris(m):
                 media_count += 1
-                if _resolve_media_path(thread_dir, uri) is None:
+                if resolve_media_path(thread_dir, uri) is None:
                     missing_media.append((f.name, uri))
         per_file.append({
             "file": f.name, "messages": f_total,

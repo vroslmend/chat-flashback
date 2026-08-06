@@ -172,13 +172,9 @@ class ThreadIndex:
         return {"message": self.to_json(idx)}
 
     def resolve_media(self, rel):
-        base = (self.thread_dir / rel).resolve()
-        root = self.thread_dir.resolve()
-        if root not in base.parents and base != root:
-            return None
-        if not base.is_file():
-            return None
-        return base
+        # Same resolver the analyzer uses, so the reader and --check agree on
+        # which attachments exist and neither can drift out of the thread dir.
+        return ac.resolve_media_path(self.thread_dir, rel)
 
 
 def _read_int(params, key):
