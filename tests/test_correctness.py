@@ -265,6 +265,40 @@ def test_urls_do_not_become_vocabulary():
     assert "look" in toks and "amazing" in toks
 
 
+def test_messenger_boilerplate_is_not_treated_as_vocabulary():
+    """Messenger fills content with "X sent an attachment." for some media."""
+    msgs = [mk("Alice", BASE + timedelta(minutes=i), "halo sent an attachment.")
+            for i in range(10)]
+    msgs += [mk("Bob", BASE + timedelta(minutes=100), "i sent an email about it")]
+    ac.add_derived_fields(msgs)
+    assert msgs[0]["tokens"] == ()
+    # A real sentence that merely mentions sending must survive.
+    assert "email" in msgs[-1]["tokens"]
+    assert ac.core_stats(msgs)["words"]["attachment"] == 0
+
+
+def test_stopwords_file_extends_the_builtin_list(tmp_path):
+    words = tmp_path / "extra.txt"
+    words.write_text("# comment\nhai\nnahi\n\n", encoding="utf-8")
+    out = tmp_path / "out"
+    before = set(ac.STOPWORDS)
+    try:
+        assert ac.main(["--input", SAMPLE, "--output", str(out),
+                        "--stopwords-file", str(words)]) == 0
+        assert "hai" in ac.STOPWORDS and "nahi" in ac.STOPWORDS
+    finally:
+        ac.STOPWORDS.clear()
+        ac.STOPWORDS.update(before)
+
+
+def test_shipped_hinglish_stopwords_load():
+    path = Path(__file__).resolve().parents[1] / "stopwords" / "hinglish.txt"
+    assert path.exists(), "stopwords/hinglish.txt should ship with the repo"
+    terms = ac.load_track_file(str(path))
+    assert "hai" in terms and "nahi" in terms and "bhi" in terms
+    assert not any(t.startswith("#") for t in terms)
+
+
 def test_laughter_slang_is_not_counted_as_profanity():
     assert "lmao" not in ac.CENSOR_WORDS
     assert "omg" not in ac.CENSOR_WORDS

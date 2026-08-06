@@ -118,6 +118,19 @@ Pass options in a JSON file instead of on the command line. CLI flags still win.
 python analyze_chat.py --config config.json
 ```
 
+### Non-English chats
+
+The built-in stopword list is English only, so in a chat that mixes languages the
+other language's function words take over the top-word, topic and running-joke
+sections. `stopwords/hinglish.txt` ships with common Urdu/Hindi words as typed in
+Latin script:
+
+```bash
+python analyze_chat.py --input data --stopwords-file stopwords/hinglish.txt
+```
+
+Any file works: one word per line, `#` for comments.
+
 ### Very large chats
 
 Everything is held in memory, so a chat with hundreds of thousands of messages

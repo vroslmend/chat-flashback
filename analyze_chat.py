@@ -87,6 +87,13 @@ CENSOR_WORDS = {str(w).lower() for w in Profanity().CENSOR_WORDSET} - NOT_PROFAN
 
 URL_RE = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
 
+# Messenger writes its own placeholder into `content` for some attachments, so
+# "X sent an attachment." shows up thousands of times and reads as vocabulary.
+# The message still counts; only its text is boilerplate rather than typed.
+BOILERPLATE_RE = re.compile(
+    r"^.{1,60}? sent (an attachment|a photo|a video|a sticker|a voice message|"
+    r"a link|a gif)\.?\s*$", re.IGNORECASE)
+
 PALETTE = ["#5b8ff9", "#5ad8a6", "#f6bd16", "#e8684a", "#6dc8ec", "#9270ca",
            "#ff9d4d", "#269a99", "#ff99c3", "#9fe6b8"]
 
@@ -365,13 +372,15 @@ def add_derived_fields(msgs):
 
 
 def _words_only(content):
-    """Message text with urls removed.
+    """Message text with urls and Messenger's own boilerplate removed.
 
     A pasted link tokenizes into "https", "www", "youtube", "com", "watch",
     which then outranks real vocabulary in word clouds, topics and especially
     running jokes. Domains are already reported separately from share links.
     """
-    return URL_RE.sub(" ", content or "")
+    if not content or BOILERPLATE_RE.match(content):
+        return ""
+    return URL_RE.sub(" ", content)
 
 
 def _tokens(m):
