@@ -431,6 +431,19 @@ main{max-width:760px;margin:0 auto;padding:0 16px 120px}
 .sent-neg{background:rgba(232,104,74,0.06)}
 .loader{text-align:center;color:var(--muted);padding:24px;font-size:13px}
 .empty{text-align:center;color:var(--muted);padding:40px;font-size:14px}
+#wordpanel{display:none;max-width:760px;margin:0 auto;padding:14px 16px 4px}
+#wordpanel.open{display:block}
+#wordq{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--fg);font-size:14px}
+#wordpanel label{display:inline-block;margin:8px 0;font-size:12px;color:var(--muted)}
+#wordout h3{font-size:15px;margin:14px 0 2px}
+#wordout p{font-size:13px;margin:4px 0}
+#wordout .muted{color:var(--muted);font-size:12px}
+#wordout table{border-collapse:collapse;font-size:13px;margin:8px 0}
+#wordout td{padding:2px 14px 2px 0;white-space:nowrap}
+#wordout td:nth-child(2),#wordout td:nth-child(3){color:var(--muted)}
+.wordex{border-left:3px solid var(--border);background:var(--quote);border-radius:4px;padding:5px 9px;margin:7px 0;font-size:13px}
+.wordex b{display:block;font-size:11px;color:var(--muted);font-weight:600;margin-bottom:2px}
+.wordex button{margin-top:5px;padding:2px 9px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg)}
 </style></head><body>
 <div class="topbar">
 <h1>__TITLE__</h1>
@@ -443,12 +456,19 @@ main{max-width:760px;margin:0 auto;padding:0 16px 120px}
 </select>
 <input id="jump" type="date" title="Jump to date"/>
 <button id="oday" title="Show this day in every year">On this day</button>
+<button id="wordbtn" title="Look up a word">Words</button>
 <button id="surprise" title="Random memory">Surprise me</button>
 <button id="theme" title="Toggle theme" aria-label="Toggle theme">Light</button>
 <span class="count" id="count"></span>
 <a href="report.html" style="color:#5b8ff9;font-size:13px">Report</a>
 <a href="year_in_review.html" style="color:#5b8ff9;font-size:13px">Years</a>
 </div>
+<section id="wordpanel">
+<input id="wordq" placeholder="Look up a word" autocomplete="off" list="wordsug"/>
+<datalist id="wordsug"></datalist>
+<label><input type="checkbox" id="wordfold"/> count spellings together</label>
+<div id="wordout"></div>
+</section>
 <main id="feed"></main>
 <div class="loader" id="loader">Loading...</div>
 <script>
@@ -459,6 +479,9 @@ var orderEl=document.getElementById('order'), jumpEl=document.getElementById('ju
 var countEl=document.getElementById('count');
 var reBtn=document.getElementById('re'), themeBtn=document.getElementById('theme');
 var odayBtn=document.getElementById('oday'), surpriseBtn=document.getElementById('surprise');
+var wordBtn=document.getElementById('wordbtn'), wordPanel=document.getElementById('wordpanel');
+var wq=document.getElementById('wordq'), wout=document.getElementById('wordout');
+var wfold=document.getElementById('wordfold'), wsug=document.getElementById('wordsug'), wtimer=null;
 var state={before:null,after:null,q:'',member:'',loading:false,done:false,searching:false,mode:'feed',regex:false};
 var lastDay='';
 var THREAD=null;
@@ -532,6 +555,61 @@ countEl.textContent='Random memory (click again for another)';
 feed.insertAdjacentHTML('beforeend',msgHTML(d.message));
 feed.insertAdjacentHTML('beforeend','<div style="text-align:center;margin-top:16px"><button onclick="randomMemory()">Another</button></div>');
 }).catch(function(){feed.innerHTML='<div class="empty">Error loading.</div>';});}
+/* Everything below builds nodes and sets textContent. The profile carries raw
+   export text, and unlike the feed it does not go through msgHTML, so nothing
+   here may use innerHTML. */
+function jumpToTs(ts){state.mode='feed';state.done=false;state.loading=false;state.searching=false;
+state.q='';qEl.value='';
+if(orderEl.value==='newest'){state.before=ts+1;state.after=null;}else{state.after=ts-1;state.before=null;}
+feed.innerHTML='';lastDay='';loader.style.display='';loadMore();
+feed.scrollIntoView();}
+function wordLine(text){var p=document.createElement('p');p.textContent=text;wout.appendChild(p);}
+function wordRow(label,e){if(!e)return null;var d=document.createElement('div');d.className='wordex';
+var b=document.createElement('b');b.textContent=label+' · '+e.sender+' · '+e.dt;
+var body=document.createElement('div');body.textContent=e.content||'(no text)';
+var j=document.createElement('button');j.textContent='open in the feed';
+j.addEventListener('click',function(){jumpToTs(e.ts);});
+d.appendChild(b);d.appendChild(body);d.appendChild(j);return d;}
+function renderWord(p){wout.textContent='';
+var h=document.createElement('h3');
+h.textContent=p.word+' — '+p.uses.toLocaleString()+' use'+(p.uses===1?'':'s')+' in '+
+p.messages.toLocaleString()+' message'+(p.messages===1?'':'s')+(p.folded?' (spellings counted together)':'');
+wout.appendChild(h);
+var meta=document.createElement('p');meta.className='muted';
+meta.textContent='First '+p.first.dt+' ('+p.first.sender+') · last '+p.last.dt+
+' · peak '+p.peak_year+(p.reaction_pull?' · pulls '+p.reaction_pull+'x the usual reactions':'')+
+' · said on its own '+p.alone_pct+'% of the time';wout.appendChild(meta);
+var t=document.createElement('table');p.per_member.forEach(function(r){var tr=t.insertRow();
+[r.member,r.uses.toLocaleString()+' ×',r.per_1k+' per 1k messages'].forEach(function(v){
+tr.insertCell().textContent=v;});});wout.appendChild(t);
+if(p.variants.length)wordLine('Also spelled: '+p.variants.map(function(x){
+return x.word+' ('+x.uses+')';}).join(', '));
+if(p.collocations.length)wordLine('Keeps company with: '+p.collocations.map(function(x){
+return x.word+' ×'+x.ratio;}).join(', '));
+var caught=p.adoption.filter(function(x){return x.first;});
+if(caught.length>1)wordLine('Caught on: '+caught.map(function(x){
+return x.member+' (+'+x.days_after+'d)';}).join(' → '));
+var never=p.adoption.filter(function(x){return !x.first;});
+if(never.length)wordLine('Never said it: '+never.map(function(x){return x.member;}).join(', '));
+[['First ever',p.examples.first],['Most reacted',p.examples.most_reacted]].concat(
+p.examples.random.map(function(e){return ['Somewhere in the middle',e];})).forEach(function(pair){
+var row=wordRow(pair[0],pair[1]);if(row)wout.appendChild(row);});}
+function wordLookup(){var q=wq.value.trim();if(!q){wout.textContent='';return;}
+fetch('/t/'+SLUG+'/api/word?q='+encodeURIComponent(q)+'&variants='+(wfold.checked?'1':'0'))
+.then(function(r){
+if(r.status===404){wout.textContent='Never said in this chat.';return null;}
+if(r.status===503){wout.textContent='Word index disabled (--no-index).';return null;}
+return r.json();}).then(function(p){if(p)renderWord(p);})
+.catch(function(){wout.textContent='Error looking that up.';});}
+wq.addEventListener('input',function(){clearTimeout(wtimer);wtimer=setTimeout(function(){
+fetch('/t/'+SLUG+'/api/suggest?q='+encodeURIComponent(wq.value.trim()))
+.then(function(r){return r.json();}).then(function(d){wsug.textContent='';
+d.words.forEach(function(w){var o=document.createElement('option');o.value=w;wsug.appendChild(o);});
+}).catch(function(){});},150);});
+wq.addEventListener('change',wordLookup);
+wfold.addEventListener('change',wordLookup);
+wordBtn.addEventListener('click',function(){var open=wordPanel.classList.toggle('open');
+wordBtn.classList.toggle('active',open);if(open)wq.focus();});
 var io=new IntersectionObserver(function(entries){if(entries[0].isIntersecting)loadMore();},{rootMargin:'600px'});
 io.observe(loader);
 qEl.addEventListener('input',function(){var v=qEl.value.trim();if(state.q===v)return;state.q=v;reset(v?'search':'');});

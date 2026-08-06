@@ -106,6 +106,13 @@ def test_suggest_endpoint_completes_a_prefix(tmp_path):
     assert "bro" in json.loads(get("/t/saturday_squad/api/suggest?q=br"))["words"]
 
 
+def test_viewer_ships_the_word_panel(tmp_path):
+    _, get = _serve(tmp_path)
+    page = get("/t/saturday_squad/")
+    assert 'id="wordpanel"' in page
+    assert 'id="wordq"' in page
+
+
 def test_word_endpoint_reports_a_disabled_index(tmp_path):
     import urllib.error
     _, get = _serve(tmp_path, build_index=False)
