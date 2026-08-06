@@ -75,9 +75,17 @@ STOPWORDS = {
     "when", "where", "who", "what", "why", "how", "all", "any", "some", "more", "most",
     "other", "one", "two", "back", "know", "think", "see", "go", "say", "good", "new",
     "time", "day", "year", "thing", "going", "make", "even", "still", "way", "well",
+    "if", "too", "now", "oh", "as", "at", "out", "off", "down", "than", "then", "there",
+    "want", "need", "come", "came", "took", "take", "give", "let", "put", "us", "am",
+    "ur", "u", "ya", "yea", "yep", "nah", "hey", "hi", "bye", "pls", "plz", "thanks",
 }
 
-CENSOR_WORDS = {str(w).lower() for w in Profanity().CENSOR_WORDSET}
+# better-profanity's list includes chat slang that nobody would call swearing;
+# left in, "lmao" alone becomes the top "swear word" of most group chats.
+NOT_PROFANITY = {"lmao", "lmfao", "lolol", "rofl", "roflmao", "omg"}
+CENSOR_WORDS = {str(w).lower() for w in Profanity().CENSOR_WORDSET} - NOT_PROFANITY
+
+URL_RE = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
 
 PALETTE = ["#5b8ff9", "#5ad8a6", "#f6bd16", "#e8684a", "#6dc8ec", "#9270ca",
            "#ff9d4d", "#269a99", "#ff99c3", "#9fe6b8"]
@@ -259,6 +267,7 @@ def normalize_messages(raw, tz=None, consume=False):
             "dt": _local_dt(ts_ms, tzinfo),
             "content": content,
             "mtype": m.get("type", "Generic"),
+            "has_type": "type" in m,
             "reactions": reactions,
             "has_photo": bool(m.get("photos")),
             "has_sticker": bool(m.get("sticker")),
@@ -347,7 +356,7 @@ def add_derived_fields(msgs):
     for m in msgs:
         content = m["content"]
         if content:
-            m["tokens"] = tuple(sys.intern(w) for w in tokenize(content))
+            m["tokens"] = tuple(sys.intern(w) for w in tokenize(_words_only(content)))
             m["emojis"] = tuple(sys.intern(e) for e in split_emojis(content))
         else:
             m["tokens"] = ()
@@ -355,10 +364,20 @@ def add_derived_fields(msgs):
     return msgs
 
 
+def _words_only(content):
+    """Message text with urls removed.
+
+    A pasted link tokenizes into "https", "www", "youtube", "com", "watch",
+    which then outranks real vocabulary in word clouds, topics and especially
+    running jokes. Domains are already reported separately from share links.
+    """
+    return URL_RE.sub(" ", content or "")
+
+
 def _tokens(m):
     """Cached tokens, falling back for callers that skipped enrichment."""
     cached = m.get("tokens")
-    return cached if cached is not None else tuple(tokenize(m["content"]))
+    return cached if cached is not None else tuple(tokenize(_words_only(m["content"])))
 
 
 def _emojis(m):
@@ -449,6 +468,9 @@ def core_stats(msgs):
         "links": links,
         "calls": calls,
         "call_seconds": call_seconds,
+        # Calls are detected from the message type. Some exports omit `type`
+        # entirely, and then zero calls means "cannot tell", not "none happened".
+        "types_available": any(m.get("has_type") for m in msgs),
     }
 
 
@@ -511,7 +533,11 @@ def personalities(msgs, top=10):
         sig = []
         for w, c in per_member_words[member].items():
             if word_totals[w] >= 3:
-                sig.append((c / word_totals[w], w, c))
+                # Count comes before the word: ranking (ratio, word) meant that
+                # among the words a member uses exclusively — all tied at 1.0 —
+                # the winner was simply the last one alphabetically, so every
+                # signature word came out starting with w, y or z.
+                sig.append((c / word_totals[w], c, w))
         sig.sort(reverse=True)
         profiles[member] = {
             "total_msgs": total_msgs,
@@ -519,8 +545,8 @@ def personalities(msgs, top=10):
             "avg_words": round(total_words / total_msgs, 2) if total_msgs else 0,
             "peak_hour": by_hour.most_common(1)[0][0] if by_hour else None,
             "night_pct": round(100 * night / total_msgs, 1) if total_msgs else 0,
-            "top_words": [w for _, w, _ in sig[:top]],
-            "signature": sig[0][1] if sig else None,
+            "top_words": [w for _, _, w in sig[:top]],
+            "signature": sig[0][2] if sig else None,
             "top_emojis": [e for e, _ in emojis.most_common(5)],
         }
     return profiles
@@ -1113,8 +1139,15 @@ def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12):
     qualifying phrase can be pruned -- while discarding the long tail of
     said-once phrases that dominates the count.
     """
+    # Members address each other constantly, so without this every "joke" is
+    # somebody's name. Urls are already stripped from the token stream.
+    name_words = set()
+    for sender in {m["sender"] for m in msgs}:
+        name_words.update(tokenize(sender))
+
     def phrase_words(m):
-        return [w for w in _tokens(m) if w not in STOPWORDS and len(w) > 2]
+        return [w for w in _tokens(m)
+                if w not in STOPWORDS and w not in name_words and len(w) > 2]
 
     def ngrams(words, n):
         return [" ".join(words[i:i + n]) for i in range(max(0, len(words) - n + 1))]
@@ -1162,8 +1195,19 @@ def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12):
                 "members": sorted(info["members"]), "years": sorted(info["years"]),
                 "example": ex,
             })
-    jokes.sort(key=lambda j: (-j["count"], -len(j["years"])))
-    return {"jokes": jokes[:top], "total_candidates": len(phrase)}
+    # Collapse phrases that are just a fragment of a longer one. "www youtube",
+    # "www youtube com" and "https www youtube com" are a single joke, and
+    # listing each n-gram separately crowds out every other entry.
+    jokes.sort(key=lambda j: (-len(j["phrase"].split()), -j["count"]))
+    kept = []
+    for joke in jokes:
+        padded = f" {joke['phrase']} "
+        if any(padded in f" {k['phrase']} " and k["count"] >= joke["count"] * 0.8
+               for k in kept):
+            continue
+        kept.append(joke)
+    kept.sort(key=lambda j: (-j["count"], -len(j["years"]), j["phrase"]))
+    return {"jokes": kept[:top], "total_candidates": len(phrase)}
 
 
 # --------------------------------------------------------------------------- #
@@ -1729,7 +1773,9 @@ def all_time_totals(stats, analyses):
         ("Swear messages", f"{swear.get('total_hits', 0):,}"),
         ("Media", f"{stats['media']:,}"),
         ("Links shared", f"{stats['links']:,}"),
-        ("Calls", f"{stats['calls']:,} ({int(stats['call_seconds'] // 60):,} min)"),
+        ("Calls", f"{stats['calls']:,} ({int(stats['call_seconds'] // 60):,} min)"
+                  if stats.get("types_available", True)
+                  else "unavailable (export has no message types)"),
         ("Conversations", f"{conv.get('conversation_count', 0):,}"),
         ("Active days", f"{active:,}"),
         ("Messages per active day",
@@ -3211,6 +3257,10 @@ def _config_signature(args):
 
 
 def run(args):
+    if getattr(args, "stopwords_file", ""):
+        extra = {w.lower() for w in load_track_file(args.stopwords_file)}
+        STOPWORDS.update(extra)
+        print(f"  Loaded {len(extra):,} extra stopwords from {args.stopwords_file}")
     thread_dirs = find_thread_dirs(args.input)
     if not thread_dirs:
         return 1
@@ -3302,6 +3352,10 @@ def main(argv=None):
                              "(Messenger timestamps are UTC; default is your system timezone)")
     parser.add_argument("--config", default="",
                         help="JSON config file with any of the CLI options")
+    parser.add_argument("--stopwords-file", default="",
+                        help="Extra stopwords to ignore in word stats, one per line "
+                             "(# comments ignored). The built-in list is English only, "
+                             "so multilingual chats need this")
     parser.add_argument("--skip", default="",
                         help="Comma-separated analyses to skip: "
                              + ", ".join(SKIPPABLE)

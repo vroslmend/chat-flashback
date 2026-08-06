@@ -246,6 +246,77 @@ def test_fastest_replier_skips_members_without_a_median():
 # running jokes                                                                #
 # --------------------------------------------------------------------------- #
 
+def test_signature_word_is_the_most_used_not_the_last_alphabetically():
+    """Words a member uses exclusively all tie at ratio 1.0, and the tiebreak
+    used to be the word itself, so signatures were always w/y/z words."""
+    msgs = [mk("Alice", BASE + timedelta(minutes=i), "apple") for i in range(500)]
+    msgs += [mk("Alice", BASE + timedelta(minutes=600 + i), "zebra") for i in range(3)]
+    msgs += [mk("Bob", BASE + timedelta(minutes=900 + i), "hello there friend")
+             for i in range(5)]
+    assert ac.personalities(msgs)["Alice"]["signature"] == "apple"
+
+
+def test_urls_do_not_become_vocabulary():
+    msgs = [mk("Alice", BASE + timedelta(minutes=i),
+               "look https://www.youtube.com/watch?v=abcd amazing") for i in range(10)]
+    ac.add_derived_fields(msgs)
+    toks = set(msgs[0]["tokens"])
+    assert "youtube" not in toks and "https" not in toks and "watch" not in toks
+    assert "look" in toks and "amazing" in toks
+
+
+def test_laughter_slang_is_not_counted_as_profanity():
+    assert "lmao" not in ac.CENSOR_WORDS
+    assert "omg" not in ac.CENSOR_WORDS
+    msgs = [mk("Alice", BASE + timedelta(minutes=i), "lmao omg") for i in range(10)]
+    assert ac.swear_stats(msgs)["total_hits"] == 0
+
+
+def test_calls_report_unavailable_when_the_export_has_no_types():
+    raw = [{"sender_name": "Alice", "timestamp_ms": 1609459200000, "content": "hi"}]
+    stats = ac.core_stats(ac.normalize_messages(raw))
+    assert stats["types_available"] is False
+    label = dict(ac.all_time_totals(stats, {}))["Calls"]
+    assert "unavailable" in label
+
+    typed = [{"sender_name": "Alice", "timestamp_ms": 1609459200000,
+              "content": "hi", "type": "Generic"}]
+    stats = ac.core_stats(ac.normalize_messages(typed))
+    assert stats["types_available"] is True
+    assert "unavailable" not in dict(ac.all_time_totals(stats, {}))["Calls"]
+
+
+def test_inside_jokes_ignores_member_names():
+    msgs = []
+    n = 0
+    for year in (2020, 2021):
+        for sender in ("Ammar Hassan", "Syed Jafri"):
+            for _ in range(4):
+                dt = BASE.replace(year=year) + timedelta(days=n)
+                msgs.append(mk(sender, dt, "ammar hassan said the thing"))
+                n += 1
+    ac.add_derived_fields(msgs)
+    phrases = {j["phrase"] for j in ac.inside_jokes(msgs)["jokes"]}
+    assert not any("ammar" in p or "hassan" in p for p in phrases), phrases
+
+
+def test_inside_jokes_collapses_fragments_of_a_longer_phrase():
+    msgs = []
+    n = 0
+    for year in (2020, 2021):
+        for sender in ("Alice", "Bob"):
+            for _ in range(4):
+                dt = BASE.replace(year=year) + timedelta(days=n)
+                msgs.append(mk(sender, dt, "pizza friday night party"))
+                n += 1
+    ac.add_derived_fields(msgs)
+    phrases = [j["phrase"] for j in ac.inside_jokes(msgs)["jokes"]]
+    assert "pizza friday night party" in phrases
+    # Its fragments have the same count, so they are the same joke.
+    assert "pizza friday" not in phrases
+    assert "friday night party" not in phrases
+
+
 def test_inside_jokes_still_finds_a_four_word_phrase():
     """Bigram pruning must not drop longer phrases that do qualify."""
     msgs = []
