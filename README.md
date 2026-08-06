@@ -91,6 +91,7 @@ Options:
 | `--anonymize` | Replace member names with Person A, Person B in all output |
 | `--track` | Comma-separated words or phrases to count, e.g. `--track "lol, bro"` |
 | `--track-file` | File with tracked terms, one per line (`#` comments and blank lines ignored) |
+| `--names` | Names of people the export doesn't list (e.g. a deleted account shown as "Facebook user"), so they don't read as topic words |
 | `--stopwords-file` | Extra stopwords to ignore in word stats, one per line (the built-in list is English only) |
 | `--year` | Analyze only one year, e.g. `--year 2017` |
 | `--top` | Number of entries in leaderboards and charts (default: 10) |

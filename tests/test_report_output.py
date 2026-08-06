@@ -14,14 +14,14 @@ from test_correctness import BASE, mk
 THREAD = "test_thread"
 
 
-def write_export(tmp_path, messages, title=THREAD):
+def write_export(tmp_path, messages, title=THREAD, participants=None):
     """A minimal Messenger export folder holding the given raw messages."""
     thread = tmp_path / "export" / f"{title}_1"
     thread.mkdir(parents=True, exist_ok=True)
+    names = participants or sorted({m["sender_name"] for m in messages})
     (thread / "message_1.json").write_text(
         json.dumps({"title": title,
-                    "participants": [{"name": n} for n in
-                                     sorted({m["sender_name"] for m in messages})],
+                    "participants": [{"name": n} for n in names],
                     "messages": messages}),
         encoding="utf-8")
     return thread
@@ -48,12 +48,17 @@ def chatter(n=40, start=BASE):
     return out
 
 
-def generate(tmp_path, messages, *extra):
-    thread = write_export(tmp_path, messages)
+def generate(tmp_path, messages, *extra, participants=None):
+    thread = write_export(tmp_path, messages, participants=participants)
     out = tmp_path / "out"
     code = ac.main(["--input", str(thread), "--output", str(out), *extra])
     assert code == 0
     return out / ac._slug(THREAD)
+
+
+def topics_of(out_dir):
+    text = (out_dir / "summary.md").read_text(encoding="utf-8")
+    return text.split("## What the chat was about")[1].split("##")[0]
 
 
 # --------------------------------------------------------------------------- #
@@ -155,11 +160,31 @@ def test_topic_words_are_not_just_everyones_names(tmp_path):
     msgs = [raw("Alice" if i % 2 else "Bob", BASE + timedelta(minutes=i),
                 "alice bob cricket")
             for i in range(12)]
-    text = (generate(tmp_path, msgs) / "summary.md").read_text(encoding="utf-8")
-    topics = text.split("## What the chat was about")[1].split("##")[0]
+    topics = topics_of(generate(tmp_path, msgs))
     assert "cricket" in topics
     assert "alice" not in topics
     assert "bob" not in topics
+
+
+def test_a_listed_participant_who_never_posted_is_not_a_topic(tmp_path):
+    """Someone can be in the chat and send nothing -- a deleted account still
+    gets talked about by name."""
+    msgs = [raw("Alice" if i % 2 else "Bob", BASE + timedelta(minutes=i),
+                "ahsan cricket") for i in range(12)]
+    topics = topics_of(generate(tmp_path, msgs,
+                                participants=["Alice", "Bob", "Ahsan Raza"]))
+    assert "cricket" in topics
+    assert "ahsan" not in topics
+
+
+def test_names_flag_covers_people_the_export_never_lists(tmp_path):
+    """The wiped account shows up as "Facebook user", so its real name is
+    nowhere in the export and has to be supplied."""
+    msgs = [raw("Alice" if i % 2 else "Bob", BASE + timedelta(minutes=i),
+                "ahsan cricket") for i in range(12)]
+    topics = topics_of(generate(tmp_path, msgs, "--names", "Ahsan, Shahood"))
+    assert "cricket" in topics
+    assert "ahsan" not in topics
 
 
 # --------------------------------------------------------------------------- #

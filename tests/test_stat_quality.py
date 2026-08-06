@@ -126,6 +126,13 @@ def test_event_messages_do_not_become_running_jokes():
     assert "gujjar town" in phrases
 
 
+def test_name_filter_covers_people_who_never_sent_a_message():
+    """A member whose account was deleted sends nothing, but is still a name."""
+    msgs = [mk("Alice Smith", BASE, "hi")]
+    assert ac._member_name_words(msgs, ["Ahsan Raza"]) == {
+        "alice", "smith", "ahsan", "raza"}
+
+
 def test_inside_jokes_record_what_each_year_did():
     msgs = [mk("A", BASE + timedelta(minutes=i), "gujjar town") for i in range(3)]
     msgs += [mk("B", BASE.replace(year=2021) + timedelta(minutes=i), "gujjar town")

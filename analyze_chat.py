@@ -520,11 +520,18 @@ def _fmt_duration(seconds):
     return f"{seconds / 3600:.1f} h"
 
 
-def _member_name_words(msgs):
-    """Every word that appears in a member's name, lowercased."""
+def _member_name_words(msgs, extra_names=()):
+    """Every word that appears in a member's name, lowercased.
+
+    Senders are not the whole cast. Someone can be in the chat and never send
+    a message in the export -- a deleted account arrives as "Facebook user" and
+    takes its real name with it -- while everyone goes on addressing them by
+    name. Left out, they read as a topic. `extra_names` carries the export's
+    participant list and anything given with --names.
+    """
     words = set()
-    for sender in {m["sender"] for m in msgs}:
-        words.update(tokenize(sender))
+    for name in {m["sender"] for m in msgs} | set(extra_names):
+        words.update(tokenize(name))
     return words
 
 
@@ -1259,7 +1266,7 @@ def question_stats(msgs):
             "unanswered_count": total_asked - total_answered}
 
 
-def topic_words(msgs, top=6):
+def topic_words(msgs, top=6, names=()):
     """Words that characterise each year, scored with tf-idf over years.
 
     Each *year* is one document, so the document frequency of a word is the
@@ -1271,7 +1278,7 @@ def topic_words(msgs, top=6):
     address each other constantly, so left in they take most of the slots and
     every year reads as a list of who was in the chat.
     """
-    name_words = _member_name_words(msgs)
+    name_words = _member_name_words(msgs, names)
     by_year = defaultdict(Counter)
     year_totals = Counter()
     years_with_word = defaultdict(set)
@@ -1299,7 +1306,7 @@ def topic_words(msgs, top=6):
     return {"by_year": result, "years": sorted(by_year)}
 
 
-def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12):
+def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12, names=()):
     """Repeated phrases said by enough people over enough years to be a joke.
 
     Done in two passes to keep memory bounded on long chats. Tracking every
@@ -1315,7 +1322,7 @@ def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12):
     """
     # Members address each other constantly, so without this every "joke" is
     # somebody's name. Urls are already stripped from the token stream.
-    name_words = _member_name_words(msgs)
+    name_words = _member_name_words(msgs, names)
 
     def phrase_words(m):
         return [w for w in _vocab(m)
@@ -3249,6 +3256,13 @@ def process_thread(thread_dir, args):
             print(f"  [skip] {thread_dir}: no messages in {args.year}")
             return
 
+    # The cast, for dropping names from topics and jokes: everyone the export
+    # lists plus anyone --names adds, since a deleted account is listed under
+    # neither. Anonymization rewrites names in the text, so the real ones are
+    # no longer there to filter.
+    names = [] if args.anonymize else list(participants) + [
+        n.strip() for n in (args.names or "").split(",") if n.strip()]
+
     anonymized = False
     if args.anonymize:
         apply_anonymization(msgs, anonymize_map(msgs))
@@ -3301,12 +3315,12 @@ def process_thread(thread_dir, args):
     if "wordcloud" not in skip:
         analyses["wordcloud"] = word_cloud_data(msgs)
     if "topics" not in skip:
-        analyses["topics"] = topic_words(msgs)
+        analyses["topics"] = topic_words(msgs, names=names)
     if "sentiment" not in skip:
         analyses["sentiment"] = sentiment_analysis(msgs)
     if "jokes" not in skip:
         _progress(args, "running jokes")
-        analyses["jokes"] = inside_jokes(msgs)
+        analyses["jokes"] = inside_jokes(msgs, names=names)
 
     out_dir = Path(args.output) / _slug(title)
     _progress(args, "charts")
@@ -3668,6 +3682,11 @@ def main(argv=None):
                              "(Messenger timestamps are UTC; default is your system timezone)")
     parser.add_argument("--config", default="",
                         help="JSON config file with any of the CLI options")
+    parser.add_argument("--names", default="",
+                        help="Comma-separated names of people in the chat that the "
+                             "export does not list, e.g. a deleted account that shows "
+                             "as 'Facebook user'. Dropped from topic words and running "
+                             "jokes, where a name would otherwise read as a topic")
     parser.add_argument("--stopwords-file", default="",
                         help="Extra stopwords to ignore in word stats, one per line "
                              "(# comments ignored). The built-in list is English only, "
