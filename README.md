@@ -90,6 +90,7 @@ Options:
 | `--port` | Port for `--serve` (default: 8080) |
 | `--tz` | Timezone for analysis, e.g. `+03:00` or `America/New_York` (Messenger timestamps are UTC; default is your system timezone) |
 | `--config` | JSON config file with any of the options above |
+| `--skip` | Skip analyses: `jokes`, `sentiment`, `wordcloud`, `topics` (comma-separated) |
 | `--progress` | Show phase progress while analyzing |
 | `--incremental` | Skip threads that are unchanged since the last run |
 | `--check` | Validate the export instead of analyzing (always exits 0) |
@@ -115,6 +116,20 @@ Pass options in a JSON file instead of on the command line. CLI flags still win.
 ```bash
 python analyze_chat.py --config config.json
 ```
+
+### Very large chats
+
+Everything is held in memory, so a chat with hundreds of thousands of messages
+needs headroom. Two analyses dominate: running jokes counts every 2-4 word
+phrase in the chat and drives peak memory, and sentiment is the slowest phase.
+Drop them if a run is too heavy:
+
+```bash
+python analyze_chat.py --input data --skip jokes,sentiment
+```
+
+Every other report, chart and page is still produced; only those sections are
+left out.
 
 ### Incremental runs
 

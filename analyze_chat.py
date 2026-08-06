@@ -34,6 +34,10 @@ except Exception:
     _VADER = None
 
 DEFAULT_OUTPUT = "output"
+# Analyses that can be turned off with --skip. "jokes" dominates peak memory
+# (it counts every 2-4 word phrase in the chat) and "sentiment" is the slowest,
+# so those two are what to drop on a very large chat or a small machine.
+SKIPPABLE = ("jokes", "sentiment", "wordcloud", "topics")
 REPLY_WINDOW_SECONDS = 60 * 60
 CONVERSATION_WINDOW_SECONDS = 30 * 60
 MESSAGE_FILE_RE = re.compile(r"^message_\d+\.json$")
@@ -2164,7 +2168,7 @@ def _year_mini_charts(stats, analyses, year):
         ax.set_title(f"Messages per month in {year}", fontweight="bold")
         pngs.append(("Monthly activity", _fig_to_png(fig)))
 
-    topics = analyses.get("topics", {}).get("by_year", {}).get(year)
+    topics = (analyses.get("topics") or {}).get("by_year", {}).get(year)
     if topics:
         words = [t["word"] for t in topics[:8]]
         vals = [t["count"] for t in topics[:8]]
@@ -2172,7 +2176,7 @@ def _year_mini_charts(stats, analyses, year):
         _bar(fig, ax, words, vals, "Top words of the year")
         pngs.append(("Top words", _fig_to_png(fig)))
 
-    emojis = analyses.get("emojis", {}).get("per_year", {}).get(year)
+    emojis = (analyses.get("emojis") or {}).get("per_year", {}).get(year)
     if emojis:
         top = emojis.most_common(8)
         fig, ax = plt.subplots(figsize=(6.5, 2.8))
@@ -2212,7 +2216,7 @@ def _year_page_html(title, year, recap, analyses, pngs):
         f"<figcaption class='muted'>{html_lib.escape(label)}</figcaption></figure>"
         for label, b64 in pngs)
 
-    jokes = analyses.get("jokes", {}).get("jokes", [])
+    jokes = (analyses.get("jokes") or {}).get("jokes", [])
     year_jokes = [j for j in jokes if year in j["years"]]
     jokes_html = ""
     if year_jokes:
@@ -2843,6 +2847,9 @@ def process_thread(thread_dir, args):
     print(f"\n  Thread: {title}  ({len(msgs):,} messages, {oldest} -> {newest})")
 
     _progress(args, "core stats")
+    skip = _parse_skip(args.skip)
+    if skip:
+        print(f"  Skipping: {', '.join(sorted(skip))}")
     stats = core_stats(msgs)
     track_terms = [t.strip() for t in args.track.split(",") if t.strip()] if args.track else []
     track_terms = track_terms + [t for t in load_track_file(args.track_file) if t not in track_terms]
@@ -2863,20 +2870,27 @@ def process_thread(thread_dir, args):
         "reply_chains": reply_chains(msgs, top=args.top),
         "ghosting": ghosting(msgs),
         "extremes": extremes(msgs),
-        "sentiment": sentiment_analysis(msgs),
         "heatmap": activity_heatmap(msgs),
         "pace": pace_trends(msgs),
         "pair_matrices": pair_matrices(msgs),
         "radar": hourly_radar(msgs),
-        "wordcloud": word_cloud_data(msgs),
         "monologues": monologues(msgs),
         "unsent": unsent_stats(msgs),
         "taken_down": taken_down_stats(msgs),
         "emojis": emoji_stats(msgs),
         "questions": question_stats(msgs),
-        "topics": topic_words(msgs),
-        "jokes": inside_jokes(msgs),
     }
+    # Skipped analyses are left out of the dict entirely rather than set to
+    # None, so every reader's `analyses.get(name, {})` keeps working.
+    if "wordcloud" not in skip:
+        analyses["wordcloud"] = word_cloud_data(msgs)
+    if "topics" not in skip:
+        analyses["topics"] = topic_words(msgs)
+    if "sentiment" not in skip:
+        analyses["sentiment"] = sentiment_analysis(msgs)
+    if "jokes" not in skip:
+        _progress(args, "running jokes")
+        analyses["jokes"] = inside_jokes(msgs)
 
     out_dir = Path(args.output) / _slug(title)
     _progress(args, "charts")
@@ -2897,6 +2911,16 @@ def process_thread(thread_dir, args):
     print(f"  First message: {oldest}  |  Last message: {newest}")
     if not args.anonymize:
         print("  Hint: re-run with --anonymize to strip names for sharing.")
+
+
+def _parse_skip(value):
+    if not value:
+        return set()
+    names = {n.strip().lower() for n in str(value).split(",") if n.strip()}
+    for unknown in sorted(names - set(SKIPPABLE)):
+        print(f"  [warn] unknown --skip value {unknown!r}; "
+              f"known: {', '.join(SKIPPABLE)}")
+    return names & set(SKIPPABLE)
 
 
 def _slug(name):
@@ -3126,6 +3150,7 @@ def _config_signature(args):
         "year": args.year, "anonymize": args.anonymize, "top": args.top,
         "track": sorted(terms),
         "tz": args.tz or "",
+        "skip": sorted(_parse_skip(args.skip)),
     }, sort_keys=True)
 
 
@@ -3221,6 +3246,11 @@ def main(argv=None):
                              "(Messenger timestamps are UTC; default is your system timezone)")
     parser.add_argument("--config", default="",
                         help="JSON config file with any of the CLI options")
+    parser.add_argument("--skip", default="",
+                        help="Comma-separated analyses to skip: "
+                             + ", ".join(SKIPPABLE)
+                             + ". 'jokes' uses the most memory and 'sentiment' "
+                               "is the slowest, so skip those on a very large chat")
     parser.add_argument("--progress", action="store_true",
                         help="Show phase progress while analyzing")
     parser.add_argument("--incremental", action="store_true",

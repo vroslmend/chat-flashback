@@ -330,6 +330,42 @@ def test_check_finds_media_with_root_relative_uris(tmp_path, capsys):
     assert "media attachments: 2 | missing on disk: 1" in out, out
 
 
+def test_skip_omits_analyses_and_still_writes_every_report(tmp_path):
+    out = tmp_path / "out"
+    assert ac.main(["--input", SAMPLE, "--output", str(out), "--json",
+                    "--skip", "jokes,sentiment,wordcloud,topics"]) == 0
+    thread = out / "saturday_squad"
+    for name in ("summary.md", "report.html", "year_in_review.html", "summary.json"):
+        assert (thread / name).exists(), f"missing {name}"
+    text = (thread / "summary.md").read_text(encoding="utf-8")
+    assert "## Running jokes" not in text
+    assert "## Sentiment" not in text
+    assert "## What the chat was about" not in text
+    assert "## Leaderboard" in text, "unskipped sections should still be there"
+    assert not (thread / "wordcloud.png").exists()
+    assert not (thread / "inside_jokes.png").exists()
+    data = json.loads((thread / "summary.json").read_text(encoding="utf-8"))
+    assert data["running_jokes"] is None
+    assert data["sentiment"] is None
+
+
+def test_skip_warns_on_an_unknown_name(tmp_path, capsys):
+    assert ac.main(["--input", SAMPLE, "--output", str(tmp_path),
+                    "--skip", "nonsense"]) == 0
+    assert "unknown --skip value" in capsys.readouterr().out
+
+
+def test_incremental_reruns_when_skip_changes(tmp_path, capsys):
+    out = tmp_path / "inc_skip"
+    base = ["--input", SAMPLE, "--output", str(out), "--incremental"]
+    assert ac.main(base) == 0
+    capsys.readouterr()
+    assert ac.main(base) == 0
+    assert "unchanged since last run" in capsys.readouterr().out
+    assert ac.main(base + ["--skip", "jokes"]) == 0
+    assert "unchanged since last run" not in capsys.readouterr().out
+
+
 def test_incremental_rerun_when_track_file_changes(tmp_path, capsys):
     out = tmp_path / "inc"
     terms = tmp_path / "terms.txt"
