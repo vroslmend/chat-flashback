@@ -397,6 +397,7 @@ def core_stats(msgs):
     by_month = Counter()
     by_year = Counter()
     by_day = Counter()
+    total_words = 0
     for m in msgs:
         member_msgs[m["sender"]] += 1
         by_hour[m["dt"].hour] += 1
@@ -404,7 +405,9 @@ def core_stats(msgs):
         by_month[m["dt"].month] += 1
         by_year[m["dt"].year] += 1
         by_day[m["dt"].date()] += 1
-        for w in _tokens(m):
+        toks = _tokens(m)
+        total_words += len(toks)
+        for w in toks:
             if w not in STOPWORDS and len(w) > 1:
                 words[w] += 1
                 per_member_words[m["sender"]][w] += 1
@@ -417,6 +420,8 @@ def core_stats(msgs):
     call_seconds = sum(m["call_duration"] or 0 for m in msgs if m["mtype"] == "Call")
     return {
         "total": len(msgs),
+        "total_words": total_words,
+        "active_days": len(by_day),
         "member_msgs": member_msgs,
         "words": words,
         "emojis": emojis,
@@ -1165,7 +1170,7 @@ def _bar(fig, ax, labels, values, title, colors=None):
     ax.margins(x=0.15)
 
 
-def write_charts(msgs, stats, analyses, out_dir, track):
+def write_charts(msgs, stats, analyses, out_dir, track, top=10):
     out_dir.mkdir(parents=True, exist_ok=True)
     theme = {"figure.facecolor": "white", "axes.facecolor": "white", "axes.edgecolor": "#dddddd"}
 
@@ -1208,7 +1213,7 @@ def write_charts(msgs, stats, analyses, out_dir, track):
         save(fig, "activity_by_weekday.png")
 
     # top members
-    top_members = stats["member_msgs"].most_common(10)
+    top_members = stats["member_msgs"].most_common(top)
     with plt.rc_context(theme):
         fig, ax = plt.subplots(figsize=(8, 4))
         _bar(fig, ax, [n for n, _ in top_members], [c for _, c in top_members], "Top members")
@@ -1251,7 +1256,7 @@ def write_charts(msgs, stats, analyses, out_dir, track):
     if react:
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(8, 4))
-            top_reactors = react["reactor"].most_common(10)
+            top_reactors = react["reactor"].most_common(top)
             _bar(fig, ax, [n for n, _ in top_reactors], [c for _, c in top_reactors],
                  "Reactions given (top reactors)")
             save(fig, "reactions_given.png")
@@ -1266,7 +1271,7 @@ def write_charts(msgs, stats, analyses, out_dir, track):
     speed = analyses.get("speed") or {}
     speed_rows = [r for r in speed.get("table") or [] if r["median_s"] is not None]
     if speed_rows:
-        rows = sorted(speed_rows, key=lambda r: r["median_s"])[:10]
+        rows = sorted(speed_rows, key=lambda r: r["median_s"])[:top]
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(8, 4.5))
             _bar(fig, ax, [r["member"] for r in rows], [max(1, r["median_s"]) for r in rows],
@@ -1279,8 +1284,8 @@ def write_charts(msgs, stats, analyses, out_dir, track):
     if swear and swear["total_hits"]:
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(8, 4))
-            top = swear["member_hits"].most_common(10)
-            _bar(fig, ax, [n for n, _ in top], [c for _, c in top],
+            top_swearers = swear["member_hits"].most_common(top)
+            _bar(fig, ax, [n for n, _ in top_swearers], [c for _, c in top_swearers],
                  "Messages containing swear words (per member)")
             save(fig, "swear_by_member.png")
         ys = sorted(swear["by_year"])
@@ -1312,7 +1317,7 @@ def write_charts(msgs, stats, analyses, out_dir, track):
     # top domains
     ld = analyses.get("links_domains", {})
     if ld and ld["domains"]:
-        top_domains = ld["domains"].most_common(10)
+        top_domains = ld["domains"].most_common(top)
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(8, 4))
             _bar(fig, ax, [d for d, _ in top_domains], [c for _, c in top_domains],
@@ -1371,7 +1376,7 @@ def write_charts(msgs, stats, analyses, out_dir, track):
     if conv and conv["starters"]:
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(8, 4))
-            top_starters = conv["starters"].most_common(10)
+            top_starters = conv["starters"].most_common(top)
             _bar(fig, ax, [n for n, _ in top_starters], [c for _, c in top_starters],
                  "Conversations started (30-min gap)")
             save(fig, "conversation_starters.png")
@@ -1390,7 +1395,7 @@ def write_charts(msgs, stats, analyses, out_dir, track):
     if ghosts:
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(8, 4))
-            top_ghosts = sorted(ghosts.items(), key=lambda kv: -kv[1])[:10]
+            top_ghosts = sorted(ghosts.items(), key=lambda kv: -kv[1])[:top]
             _bar(fig, ax, [n for n, _ in top_ghosts], [c for _, c in top_ghosts],
                  "Longest silent streak (days)")
             save(fig, "ghosting.png")
@@ -1429,7 +1434,7 @@ def write_charts(msgs, stats, analyses, out_dir, track):
     if senti:
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(8, 4))
-            top_senti = sorted(senti["per_member"].items(), key=lambda kv: -kv[1])[:10]
+            top_senti = sorted(senti["per_member"].items(), key=lambda kv: -kv[1])[:top]
             _bar(fig, ax, [n for n, _ in top_senti], [round(c * 100) for _, c in top_senti],
                  "Average sentiment (VADER x100, higher = happier)")
             save(fig, "sentiment_per_member.png")
@@ -1576,7 +1581,7 @@ def write_charts(msgs, stats, analyses, out_dir, track):
     if mono and mono["per_member_longest"]:
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(8, 4))
-            top_mono = mono["per_member_longest"].most_common(10)
+            top_mono = mono["per_member_longest"].most_common(top)
             _bar(fig, ax, [n for n, _ in top_mono], [c for _, c in top_mono],
                  "Longest solo run (messages in a row)")
             save(fig, "monologues.png")
@@ -1586,7 +1591,7 @@ def write_charts(msgs, stats, analyses, out_dir, track):
     if unsent and any(unsent.values()):
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(8, 4))
-            top_unsent = unsent.most_common(10)
+            top_unsent = unsent.most_common(top)
             _bar(fig, ax, [n for n, _ in top_unsent], [c for _, c in top_unsent],
                  "Unsent messages per member")
             save(fig, "unsent.png")
@@ -1612,7 +1617,7 @@ def write_charts(msgs, stats, analyses, out_dir, track):
     # question dynamics
     qst = analyses.get("questions")
     if qst and qst["table"]:
-        top_q = qst["table"][:10]
+        top_q = qst["table"][:top]
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(8, 4))
             _bar(fig, ax, [r["member"] for r in top_q], [r["asked"] for r in top_q],
@@ -1620,7 +1625,7 @@ def write_charts(msgs, stats, analyses, out_dir, track):
             save(fig, "questions_asked.png")
         responders = [r for r in qst["table"] if r["median_m"] is not None]
         if responders:
-            responders = sorted(responders, key=lambda r: r["median_m"])[:10]
+            responders = sorted(responders, key=lambda r: r["median_m"])[:top]
             with plt.rc_context(theme):
                 fig, ax = plt.subplots(figsize=(8, 4))
                 _bar(fig, ax, [r["member"] for r in responders],
@@ -1686,17 +1691,51 @@ def _media_label(m):
 # Summary                                                                     #
 # --------------------------------------------------------------------------- #
 
-def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
+def all_time_totals(stats, analyses):
+    """Whole-chat numbers as (label, value) pairs.
+
+    Each of these already existed, but scattered across the section that
+    happened to compute it, so nothing answered "how big is this chat" in one
+    place. Values come from analyses that --skip can remove, hence the guards.
+    """
+    react = analyses.get("reactions") or {}
+    swear = analyses.get("swear") or {}
+    qst = analyses.get("questions") or {}
+    conv = analyses.get("conversations") or {}
+    emo = analyses.get("emojis") or {}
+    active = stats.get("active_days") or 0
+    emoji_total = emo.get("total_emojis")
+    if emoji_total is None:
+        emoji_total = sum(stats["emojis"].values())
+    return [
+        ("Messages", f"{stats['total']:,}"),
+        ("Members", f"{len(stats['member_msgs']):,}"),
+        ("Words", f"{stats.get('total_words', 0):,}"),
+        ("Emojis", f"{emoji_total:,}"),
+        ("Reactions", f"{react.get('total_reactions', 0):,}"),
+        ("Questions asked", f"{qst.get('total_questions', 0):,}"),
+        ("Swear messages", f"{swear.get('total_hits', 0):,}"),
+        ("Media", f"{stats['media']:,}"),
+        ("Links shared", f"{stats['links']:,}"),
+        ("Calls", f"{stats['calls']:,} ({int(stats['call_seconds'] // 60):,} min)"),
+        ("Conversations", f"{conv.get('conversation_count', 0):,}"),
+        ("Active days", f"{active:,}"),
+        ("Messages per active day",
+         f"{stats['total'] / active:,.1f}" if active else "-"),
+        ("Longest daily streak", f"{stats['longest_streak']:,} days"),
+    ]
+
+
+def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top=10):
     lines = [f"# {title} flashback", ""]
     lines.append(f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')}"
                  + (" (names anonymized)" if anonymized else "") + "")
+    lines.append("")
+    lines.append("## All-time totals")
+    lines.append("")
     lines.append(f"- **Period**: {dates[0]} to {dates[-1]}")
-    lines.append(f"- **Total messages**: {stats['total']:,}")
-    lines.append(f"- **Members**: {len(stats['member_msgs'])}")
-    lines.append(f"- **Longest daily streak**: {stats['longest_streak']} day{'s' if stats['longest_streak'] != 1 else ''}")
-    lines.append(f"- **Media (photos, stickers, GIFs, videos, audio, files)**: {stats['media']}")
-    lines.append(f"- **Links shared**: {stats['links']}")
-    lines.append(f"- **Calls**: {stats['calls']} ({int(stats['call_seconds'] // 60)} min)")
+    for label, value in all_time_totals(stats, analyses):
+        lines.append(f"- **{label}**: {value}")
     lines.append("")
 
     lines.append("## Leaderboard")
@@ -1704,7 +1743,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
     lines.append("| Member | Messages | Share |")
     lines.append("|---|---|---|")
     total = max(1, stats["total"])
-    for member, count in stats["member_msgs"].most_common(10):
+    for member, count in stats["member_msgs"].most_common(top):
         lines.append(f"| {member} | {count:,} | {100 * count / total:.1f}% |")
     lines.append("")
 
@@ -1738,7 +1777,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
     lines.append("")
     lines.append("| Reactor | Reactions given |")
     lines.append("|---|---|")
-    for member, count in react["reactor"].most_common(10):
+    for member, count in react["reactor"].most_common(top):
         lines.append(f"| {member} | {count:,} |")
     lines.append("")
 
@@ -1764,7 +1803,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
         lines.append("")
         lines.append("| Member | Swear messages | Signature swear word |")
         lines.append("|---|---|---|")
-        for member, count in swear["member_hits"].most_common(10):
+        for member, count in swear["member_hits"].most_common(top):
             sig = swear["member_words"][member].most_common(1)[0][0] if swear["member_words"][member] else "-"
             lines.append(f"| {member} | {count} | {sig} |")
     else:
@@ -1777,8 +1816,8 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
         lines.append("| Term | Total | Top user |")
         lines.append("|---|---|---|")
         for term, data in track.items():
-            top = data["per_member"].most_common(1)[0] if data["per_member"] else ("-", 0)
-            lines.append(f"| {term} | {data['count']} | {top[0]} ({top[1]}) |")
+            top_user = data["per_member"].most_common(1)[0] if data["per_member"] else ("-", 0)
+            lines.append(f"| {term} | {data['count']} | {top_user[0]} ({top_user[1]}) |")
         lines.append("")
 
     weird = analyses["weird"]
@@ -1799,7 +1838,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
         lines.append("")
         lines.append("| Domain | Shares |")
         lines.append("|---|---|")
-        for domain, count in ld["domains"].most_common(10):
+        for domain, count in ld["domains"].most_common(top):
             lines.append(f"| {domain} | {count} |")
         lines.append("")
 
@@ -1831,7 +1870,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
         lines.append("")
         lines.append("| Member | Sessions started |")
         lines.append("|---|---|")
-        for member, count in conv["starters"].most_common(10):
+        for member, count in conv["starters"].most_common(top):
             lines.append(f"| {member} | {count} |")
         if conv["longest_run"]:
             run = conv["longest_run"]
@@ -1968,7 +2007,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
         lines.append("")
         lines.append("| Member | Longest solo run |")
         lines.append("|---|---|")
-        for member, length in mono["per_member_longest"].most_common(10):
+        for member, length in mono["per_member_longest"].most_common(top):
             lines.append(f"| {member} | {length} |")
         run = mono["longest_run"]
         lines.append("")
@@ -1984,7 +2023,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
         lines.append("")
         lines.append("| Member | Unsent |")
         lines.append("|---|---|")
-        for member, count in unsent.most_common(10):
+        for member, count in unsent.most_common(top):
             lines.append(f"| {member} | {count} |")
         lines.append("")
 
@@ -1996,7 +2035,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
         lines.append("")
         lines.append("| Member | Removed |")
         lines.append("|---|---|")
-        for member, count in taken_down.most_common(10):
+        for member, count in taken_down.most_common(top):
             lines.append(f"| {member} | {count} |")
         lines.append("")
 
@@ -2376,7 +2415,7 @@ def _table(columns, rows):
     return f"<table>{_thead(columns)}{body}</table>"
 
 
-def write_report_html(title, stats, analyses, out_dir, anonymized, dates):
+def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10):
     charts = sorted(out_dir.glob("*.png"))
     imgs = "".join(
         f'<figure><img loading="lazy" src="data:image/png;base64,{_base64_png(c)}" '
@@ -2389,8 +2428,8 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates):
     ex = analyses.get("extremes")
 
     leader_rows = [(html_lib.escape(m), f"{c:,}", f"{100 * c / max(1, stats['total']):.1f}%")
-                   for m, c in stats["member_msgs"].most_common(10)]
-    reactor_rows = [(html_lib.escape(m), f"{c:,}") for m, c in react["reactor"].most_common(10)]
+                   for m, c in stats["member_msgs"].most_common(top)]
+    reactor_rows = [(html_lib.escape(m), f"{c:,}") for m, c in react["reactor"].most_common(top)]
 
     sections = []
     sections.append(_sec("highlights", "Highlights",
@@ -2415,7 +2454,7 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates):
     mono = analyses.get("monologues")
     if mono and mono["per_member_longest"]:
         rows = [(html_lib.escape(m), str(n))
-                for m, n in mono["per_member_longest"].most_common(10)]
+                for m, n in mono["per_member_longest"].most_common(top)]
         sections.append(_sec("monologues", "Monologues",
                              _table(["Member", "Longest solo run"], rows)))
 
@@ -2520,6 +2559,10 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates):
                            ("topics", "Topics"), ("jokes", "Jokes"),
                            ("media", "Media"), ("charts", "Charts")]
     )
+    totals_cards = "".join(
+        f"<div class='card'><b>{html_lib.escape(value)}</b>"
+        f"<span>{html_lib.escape(label.lower())}</span></div>"
+        for label, value in all_time_totals(stats, analyses))
     body = f"""<div class="topbar"><span class="brand">{html_lib.escape(title)} flashback</span>
 <nav>{nav}</nav>
 <a class="years" href="year_in_review.html">Years</a>
@@ -2529,13 +2572,9 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates):
 <p class="muted">Generated {datetime.now().strftime('%Y-%m-%d %H:%M')}
 {"(names anonymized)" if anonymized else ""}</p>
 <div class="cards">
-<div class="card"><b>{stats['total']:,}</b><span>messages</span></div>
-<div class="card"><b>{len(stats['member_msgs'])}</b><span>members</span></div>
 <div class="card"><b>{dates[0]}</b><span>start</span></div>
 <div class="card"><b>{dates[-1]}</b><span>end</span></div>
-<div class="card"><b>{stats['longest_streak']}</b><span>day streak</span></div>
-<div class="card"><b>{stats['media']}</b><span>media</span></div>
-<div class="card"><b>{stats['calls']}</b><span>calls</span></div>
+{totals_cards}
 </div>
 {''.join(sections)}
 </main>"""
@@ -2598,7 +2637,7 @@ rows.forEach(function(tr){{tb.appendChild(tr);}});}});}});}});
     (out_dir / "report.html").write_text(doc, encoding="utf-8")
 
 
-def write_summary_json(title, stats, analyses, out_dir, anonymized, dates):
+def write_summary_json(title, stats, analyses, out_dir, anonymized, dates, top=10):
     react = analyses["reactions"]
     senti = analyses.get("sentiment")
     ex = analyses.get("extremes")
@@ -2609,12 +2648,15 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates):
         "anonymized": anonymized,
         "period": {"start": dates[0], "end": dates[-1]},
         "total_messages": stats["total"],
+        "totals": {label: value for label, value in all_time_totals(stats, analyses)},
+        "total_words": stats.get("total_words", 0),
+        "active_days": stats.get("active_days", 0),
         "members": len(stats["member_msgs"]),
         "longest_streak_days": stats["longest_streak"],
         "media": stats["media"],
         "calls": stats["calls"],
         "leaderboard": [{"member": m, "messages": c}
-                        for m, c in stats["member_msgs"].most_common(10)],
+                        for m, c in stats["member_msgs"].most_common(top)],
         "yearly": {y: {
             "total": r["total"], "active_members": r["active_members"],
             "top_member": r["top_member"],
@@ -2633,7 +2675,7 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates):
         "reactions": {
             "total": react["total_reactions"], "reacted_messages": react["total_reacted"],
             "most_reactive": react["most_reactive"],
-            "reactors": [{"member": m, "count": c} for m, c in react["reactor"].most_common(10)],
+            "reactors": [{"member": m, "count": c} for m, c in react["reactor"].most_common(top)],
             "emoji_breakdown": [{"emoji": e, "count": c} for e, c in react["reaction_emoji"].most_common(20)],
         },
         "response_speed": [
@@ -2644,7 +2686,7 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates):
         "swear_words": {
             "total_hits": analyses["swear"]["total_hits"],
             "per_member": [{"member": m, "count": c}
-                           for m, c in analyses["swear"]["member_hits"].most_common(10)],
+                           for m, c in analyses["swear"]["member_hits"].most_common(top)],
         },
         "weirdest_statements": [
             {"member": s["member"], "ts": s["dt"].strftime("%Y-%m-%d %H:%M"),
@@ -2653,9 +2695,9 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates):
         ],
         "links": {
             "top_domains": [{"domain": d, "count": c}
-                            for d, c in analyses.get("links_domains", {}).get("domains", {}).most_common(10)],
+                            for d, c in analyses.get("links_domains", {}).get("domains", {}).most_common(top)],
             "top_links": [{"url": u, "count": c}
-                          for u, c in analyses.get("links_domains", {}).get("links", {}).most_common(10)],
+                          for u, c in analyses.get("links_domains", {}).get("links", {}).most_common(top)],
         },
         "media": {m: {"photos": analyses["media"]["photos"].get(m, 0),
                       "stickers": analyses["media"]["stickers"].get(m, 0),
@@ -2669,7 +2711,7 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates):
             "count": analyses["conversations"]["conversation_count"],
             "longest_run_msgs": analyses["conversations"]["longest_run_len"],
             "starters": [{"member": m, "count": c}
-                         for m, c in analyses["conversations"]["starters"].most_common(10)],
+                         for m, c in analyses["conversations"]["starters"].most_common(top)],
         },
         "reply_chains": ({"count": chains["count"], "longest": [len(c) for c in chains["top_chains"]]}
                          if chains else None),
@@ -2711,7 +2753,7 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates):
                     "emojis_per_100": analyses["emojis"]["emojis_per_100"],
                     "per_member": {m: [{"emoji": e, "count": c} for e, c in cnt.most_common(20)]
                                    for m, cnt in analyses["emojis"]["per_member"].items()},
-                    "per_year": {y: [{"emoji": e, "count": c} for e, c in cnt.most_common(10)]
+                    "per_year": {y: [{"emoji": e, "count": c} for e, c in cnt.most_common(top)]
                                  for y, cnt in analyses["emojis"]["per_year"].items()}}
                    if analyses.get("emojis") else None),
         "questions": ({"total": analyses["questions"]["total_questions"],
@@ -2894,15 +2936,17 @@ def process_thread(thread_dir, args):
 
     out_dir = Path(args.output) / _slug(title)
     _progress(args, "charts")
-    write_charts(msgs, stats, analyses, out_dir, track_terms)
+    write_charts(msgs, stats, analyses, out_dir, track_terms, top=args.top)
     _progress(args, "writing")
     write_summary(title, stats, analyses, analyses["track"], out_dir, anonymized,
-                  [oldest[:10], newest[:10]])
-    write_report_html(title, stats, analyses, out_dir, anonymized, [oldest[:10], newest[:10]])
+                  [oldest[:10], newest[:10]], top=args.top)
+    write_report_html(title, stats, analyses, out_dir, anonymized,
+                      [oldest[:10], newest[:10]], top=args.top)
     _progress(args, "year reviews")
     write_year_reviews(title, stats, analyses, out_dir)
     if args.json:
-        write_summary_json(title, stats, analyses, out_dir, anonymized, [oldest[:10], newest[:10]])
+        write_summary_json(title, stats, analyses, out_dir, anonymized,
+                           [oldest[:10], newest[:10]], top=args.top)
     console_summary(title, stats, analyses, [oldest[:10], newest[:10]])
     if args.progress:
         sys.stderr.write("\r" + " " * 40 + "\r")

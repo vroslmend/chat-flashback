@@ -330,6 +330,47 @@ def test_check_finds_media_with_root_relative_uris(tmp_path, capsys):
     assert "media attachments: 2 | missing on disk: 1" in out, out
 
 
+def test_top_controls_the_leaderboard_length(tmp_path):
+    """--top was documented as controlling leaderboards but was hardcoded to 10,
+    so members past the tenth never appeared."""
+    def leaderboard(out):
+        section = (out / "saturday_squad" / "summary.md").read_text(
+            encoding="utf-8").split("## Leaderboard")[1].split("\n## ")[0]
+        return [l for l in section.splitlines()
+                if l.startswith("|") and not l.startswith("|---")][1:]
+
+    small = tmp_path / "small"
+    assert ac.main(["--input", SAMPLE, "--output", str(small), "--top", "2"]) == 0
+    assert len(leaderboard(small)) == 2
+
+    big = tmp_path / "big"
+    assert ac.main(["--input", SAMPLE, "--output", str(big), "--top", "4"]) == 0
+    assert len(leaderboard(big)) == 4
+
+
+def test_all_time_totals_are_reported(tmp_path):
+    out = tmp_path / "out"
+    assert ac.main(["--input", SAMPLE, "--output", str(out), "--json"]) == 0
+    text = (out / "saturday_squad" / "summary.md").read_text(encoding="utf-8")
+    assert "## All-time totals" in text
+    for label in ("Messages", "Words", "Emojis", "Reactions", "Questions asked",
+                  "Active days", "Conversations"):
+        assert f"**{label}**" in text, f"missing total: {label}"
+    data = json.loads((out / "saturday_squad" / "summary.json").read_text(encoding="utf-8"))
+    assert data["totals"]["Messages"] == "94"
+    assert data["total_words"] > 0
+    assert data["active_days"] > 0
+
+
+def test_all_time_totals_survive_skipped_analyses(tmp_path):
+    out = tmp_path / "out"
+    assert ac.main(["--input", SAMPLE, "--output", str(out),
+                    "--skip", "jokes,sentiment,topics,wordcloud"]) == 0
+    text = (out / "saturday_squad" / "summary.md").read_text(encoding="utf-8")
+    assert "## All-time totals" in text
+    assert "**Messages**: 94" in text
+
+
 def test_skip_omits_analyses_and_still_writes_every_report(tmp_path):
     out = tmp_path / "out"
     assert ac.main(["--input", SAMPLE, "--output", str(out), "--json",

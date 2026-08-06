@@ -17,8 +17,8 @@ def test_full_pipeline_produces_report_and_charts(tmp_path):
     report = out / "saturday_squad" / "summary.md"
     assert report.exists()
     text = report.read_text(encoding="utf-8")
-    assert "Total messages" in text
-    assert "94" in text
+    assert "## All-time totals" in text
+    assert "**Messages**: 94" in text
     assert "Yearly recaps" in text
     assert "Member personalities" in text
     assert "Reaction dynamics" in text
