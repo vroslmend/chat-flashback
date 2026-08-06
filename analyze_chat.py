@@ -189,10 +189,18 @@ def _local_dt(ts_ms, tzinfo):
     return datetime.fromtimestamp(ts_ms / 1000, tzinfo).replace(tzinfo=None)
 
 
-def normalize_messages(raw, tz=None):
+def normalize_messages(raw, tz=None, consume=False):
+    """Turn raw export dicts into the normalized messages the analyses use.
+
+    With consume=True the input list is emptied as it is read, so the raw and
+    normalized copies of a large chat never both sit in memory. Entries are
+    taken from the end, which is why the result is sorted at the end anyway.
+    """
     tzinfo = _parse_tz(tz) if tz else None
     msgs = []
-    for m in raw:
+    for i, m in enumerate(raw):
+        if consume:
+            raw[i] = None       # drop the raw dict as soon as it is converted
         sender = m.get("sender_name")
         if not sender:
             continue
@@ -309,6 +317,39 @@ def split_emojis(text):
     return [c for c in (text or "") if emoji_lib.is_emoji(c)]
 
 
+def add_derived_fields(msgs):
+    """Tokenize and scan for emojis once per message, up front.
+
+    Nine analyses tokenize the same text and four scan it for emojis. Doing
+    that per analysis re-runs the same regex, and the same per-character emoji
+    lookup, over the whole chat nine times.
+
+    Tokens are interned, so a long chat holds pointers into its own vocabulary
+    instead of millions of duplicate strings, and messages without text share
+    the empty tuple. Must run after any anonymization, which rewrites content.
+    """
+    for m in msgs:
+        content = m["content"]
+        if content:
+            m["tokens"] = tuple(sys.intern(w) for w in tokenize(content))
+            m["emojis"] = tuple(sys.intern(e) for e in split_emojis(content))
+        else:
+            m["tokens"] = ()
+            m["emojis"] = ()
+    return msgs
+
+
+def _tokens(m):
+    """Cached tokens, falling back for callers that skipped enrichment."""
+    cached = m.get("tokens")
+    return cached if cached is not None else tuple(tokenize(m["content"]))
+
+
+def _emojis(m):
+    cached = m.get("emojis")
+    return cached if cached is not None else tuple(split_emojis(m["content"]))
+
+
 def _median(sorted_values):
     n = len(sorted_values)
     if not n:
@@ -359,11 +400,11 @@ def core_stats(msgs):
         by_month[m["dt"].month] += 1
         by_year[m["dt"].year] += 1
         by_day[m["dt"].date()] += 1
-        for w in tokenize(m["content"]):
+        for w in _tokens(m):
             if w not in STOPWORDS and len(w) > 1:
                 words[w] += 1
                 per_member_words[m["sender"]][w] += 1
-        for e in split_emojis(m["content"]):
+        for e in _emojis(m):
             emojis[e] += 1
             per_member_emojis[m["sender"]][e] += 1
     media = sum(1 for m in msgs if m["has_media"])
@@ -406,8 +447,8 @@ def yearly_recaps(msgs):
         day_counts = Counter()
         best_reacted = None
         for m in group:
-            words.update(w for w in tokenize(m["content"]) if w not in STOPWORDS and len(w) > 1)
-            emojis.update(split_emojis(m["content"]))
+            words.update(w for w in _tokens(m) if w not in STOPWORDS and len(w) > 1)
+            emojis.update(_emojis(m))
             day_counts[m["dt"].date()] += 1
             if m["reactions"] and (best_reacted is None or
                                    len(m["reactions"]) > len(best_reacted["reactions"])):
@@ -434,15 +475,15 @@ def personalities(msgs, top=10):
     per_member = defaultdict(list)
     for m in msgs:
         per_member[m["sender"]].append(m)
-        for w in tokenize(m["content"]):
+        for w in _tokens(m):
             if w not in STOPWORDS and len(w) > 1:
                 per_member_words[m["sender"]][w] += 1
                 word_totals[w] += 1
-        for e in split_emojis(m["content"]):
+        for e in _emojis(m):
             per_member_emojis[m["sender"]][e] += 1
     for member, group in per_member.items():
         total_msgs = len(group)
-        total_words = sum(len(tokenize(m["content"])) for m in group)
+        total_words = sum(len(_tokens(m)) for m in group)
         by_hour = Counter(m["dt"].hour for m in group)
         night = sum(1 for m in group if m["dt"].hour < 6)
         emojis = per_member_emojis[member]
@@ -553,7 +594,7 @@ def swear_stats(msgs):
     total_hits = 0
     for m in msgs:
         found = False
-        for w in tokenize(m["content"]):
+        for w in _tokens(m):
             if w in CENSOR_WORDS:
                 member_words[m["sender"]][w] += 1
                 word_totals[w] += 1
@@ -614,7 +655,7 @@ def weird_statements(msgs, top=10):
         if m["dt"].hour < 6:
             score += 1
             reasons.append("sent after midnight")
-        toks = tokenize(text)
+        toks = _tokens(m)
         if any(toks.count(w) >= 4 for w in set(toks)):
             score += 1
             reasons.append("repeated word")
@@ -700,7 +741,7 @@ def word_trends(msgs, top=5):
     per_year_word = defaultdict(Counter)
     for m in msgs:
         y = m["dt"].year
-        for w in tokenize(m["content"]):
+        for w in _tokens(m):
             if w not in STOPWORDS and len(w) > 1:
                 totals[w] += 1
                 per_year_word[y][w] += 1
@@ -882,7 +923,7 @@ def word_cloud_data(msgs):
     overall = Counter()
     per_member = defaultdict(Counter)
     for m in msgs:
-        for w in tokenize(m["content"]):
+        for w in _tokens(m):
             if w not in STOPWORDS and len(w) > 1:
                 overall[w] += 1
                 per_member[m["sender"]][w] += 1
@@ -928,7 +969,7 @@ def emoji_stats(msgs):
     per_year = defaultdict(Counter)
     member_total = Counter(m["sender"] for m in msgs)
     for m in msgs:
-        emojis = split_emojis(m["content"])
+        emojis = _emojis(m)
         if not emojis:
             continue
         per_member[m["sender"]].update(emojis)
@@ -983,7 +1024,7 @@ def question_stats(msgs):
             answer_time[responder].append((msgs[j]["ts_ms"] - m["ts_ms"]) / 1000)
 
     table = []
-    for member in set(asked) | set(responses):
+    for member in sorted(set(asked) | set(responses)):
         a = asked[member]
         gaps = sorted(answer_time[member])
         med = _median(gaps)
@@ -995,7 +1036,8 @@ def question_stats(msgs):
             "responses_given": responses[member],
             "median_m": round(med / 60, 1) if med is not None else None,
         })
-    table.sort(key=lambda r: -r["asked"])
+    # Name breaks ties so equal rows keep the same order from run to run.
+    table.sort(key=lambda r: (-r["asked"], r["member"]))
     return {"table": table, "total_questions": total_asked,
             "total_answered": total_answered,
             "unanswered_count": total_asked - total_answered}
@@ -1014,7 +1056,7 @@ def topic_words(msgs, top=6):
     years_with_word = defaultdict(set)
     for m in msgs:
         year = m["dt"].year
-        for w in tokenize(m["content"]):
+        for w in _tokens(m):
             if w in STOPWORDS or len(w) <= 2:
                 continue
             by_year[year][w] += 1
@@ -1051,7 +1093,7 @@ def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12):
     said-once phrases that dominates the count.
     """
     def phrase_words(m):
-        return [w for w in tokenize(m["content"]) if w not in STOPWORDS and len(w) > 2]
+        return [w for w in _tokens(m) if w not in STOPWORDS and len(w) > 2]
 
     def ngrams(words, n):
         return [" ".join(words[i:i + n]) for i in range(max(0, len(words) - n + 1))]
@@ -2767,11 +2809,17 @@ def process_thread(thread_dir, args):
         print(f"  [skip] {thread_dir}: no message files")
         return
     title, participants, raw = loaded
+    # Release the raw export as it is converted: on a chat of a few hundred
+    # thousand messages the raw dicts and the normalized ones are each of the
+    # order of gigabytes, and holding both at once doubles the peak.
+    loaded = None
     try:
-        msgs = normalize_messages(raw, tz=args.tz)
+        msgs = normalize_messages(raw, tz=args.tz, consume=True)
     except ValueError as exc:
         print(f"  [error] {thread_dir}: {exc}")
         return
+    finally:
+        raw = None
     if not msgs:
         print(f"  [skip] {thread_dir}: no usable messages")
         return
@@ -2785,6 +2833,9 @@ def process_thread(thread_dir, args):
     if args.anonymize:
         apply_anonymization(msgs, anonymize_map(msgs))
         anonymized = True
+
+    # After anonymization, since that rewrites message content.
+    add_derived_fields(msgs)
 
     _progress(args, "normalized")
     oldest = msgs[0]["dt"].strftime("%Y-%m-%d %H:%M")
