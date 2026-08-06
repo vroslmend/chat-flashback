@@ -21,6 +21,7 @@ _RUN_RE = re.compile(r"(.)\1+")
 MAX_COLLOCATIONS = 10
 MIN_COLLOCATION_MESSAGES = 3
 RANDOM_EXAMPLES = 3
+RESOLVED_CACHE = 8
 
 
 def _collapse(word):
@@ -93,6 +94,7 @@ class WordIndex:
         self._by_collapsed = defaultdict(list)
         for w in self.postings:
             self._by_collapsed[_collapse(w)].append(w)
+        self._resolved = {}
 
     # ----------------------------------------------------------------- #
     # queries                                                            #
@@ -100,12 +102,45 @@ class WordIndex:
 
     def profile(self, query, fold_variants=False):
         """A word or a phrase, told apart by how many tokens the query holds."""
+        found = self._resolve(query, fold_variants)
+        if found is None:
+            return None
+        label, idxs, patterns, seqs = found
+        result = self._profile_from(label, idxs, patterns, seqs)
+        single = len(patterns[0]) == 1
+        result["variants"] = self.variants_of(label) if single else []
+        result["folded"] = bool(fold_variants) and single
+        return result
+
+    def matches(self, query, fold_variants=False):
+        """Every message holding the query, oldest first, as message indices.
+
+        The reader pages through these, so the resolution is remembered: a
+        phrase costs an intersection and a verification walk, and paying it
+        again for every scroll would make the list crawl on a common word.
+        """
+        found = self._resolve(query, fold_variants)
+        return [] if found is None else found[1]
+
+    def _resolve(self, query, fold_variants=False):
+        """(label, message indices, patterns, sequences) for a word or phrase."""
         terms = _sequence(query)
         if not terms:
             return None
-        if len(terms) > 1:
-            return self._phrase_profile(terms)
-        word = terms[0]
+        key = (tuple(terms), bool(fold_variants))
+        if key in self._resolved:
+            return self._resolved[key]
+        found = (self._resolve_phrase(terms) if len(terms) > 1
+                 else self._resolve_word(terms[0], fold_variants))
+        if found is not None:
+            # A handful of queries is all a reader has open at once, and each
+            # entry holds indices into messages it does not own.
+            if len(self._resolved) >= RESOLVED_CACHE:
+                self._resolved.clear()
+            self._resolved[key] = found
+        return found
+
+    def _resolve_word(self, word, fold_variants):
         if word not in self.postings:
             return None
         words = [word]
@@ -115,12 +150,9 @@ class WordIndex:
             idxs = list(self.postings[word])
         else:
             idxs = sorted({i for w in words for i in self.postings[w]})
-        result = self._profile_from(word, idxs, [(w,) for w in words])
-        result["variants"] = self.variants_of(word)
-        result["folded"] = bool(fold_variants)
-        return result
+        return word, idxs, [(w,) for w in words], None
 
-    def _phrase_profile(self, terms):
+    def _resolve_phrase(self, terms):
         """Messages holding every word, then those holding them side by side."""
         distinct = set(terms)
         if any(term not in self.postings for term in distinct):
@@ -144,10 +176,7 @@ class WordIndex:
                 seqs[i] = seq
         if not seqs:
             return None
-        result = self._profile_from(" ".join(terms), sorted(seqs), [pattern], seqs)
-        result["variants"] = []
-        result["folded"] = False
-        return result
+        return " ".join(terms), sorted(seqs), [pattern], seqs
 
     def variants_of(self, word):
         """Other spellings that differ from `word` only in held-down letters."""

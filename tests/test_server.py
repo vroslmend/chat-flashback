@@ -132,3 +132,43 @@ def test_word_endpoint_reports_a_disabled_index(tmp_path):
         assert exc.code == 503
     else:
         raise AssertionError("expected 503")
+
+
+def test_word_hits_list_every_mention_oldest_first(tmp_path):
+    _, get = _serve(tmp_path)
+    body = json.loads(get("/t/saturday_squad/api/word/hits?q=shawarma"))
+    assert body["total"] == 5
+    assert len(body["messages"]) == 5
+    assert body["next_offset"] is None
+    stamps = [m["ts"] for m in body["messages"]]
+    assert stamps == sorted(stamps)
+    assert all("shawarma" in m["content"].lower() for m in body["messages"])
+
+
+def test_word_hits_page_through_a_word(tmp_path):
+    _, get = _serve(tmp_path)
+    first = json.loads(get("/t/saturday_squad/api/word/hits?q=shawarma&limit=2"))
+    assert len(first["messages"]) == 2 and first["next_offset"] == 2
+    second = json.loads(
+        get("/t/saturday_squad/api/word/hits?q=shawarma&limit=2&offset=2"))
+    assert second["messages"][0]["ts"] > first["messages"][-1]["ts"]
+
+
+def test_word_hits_404s_on_an_unknown_word(tmp_path):
+    import urllib.error
+    _, get = _serve(tmp_path)
+    try:
+        get("/t/saturday_squad/api/word/hits?q=zzzznotaword")
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+    else:
+        raise AssertionError("expected 404")
+
+
+def test_the_viewer_groups_each_day_so_headers_cannot_stack(tmp_path):
+    """Sticky siblings all stop at the same offset and pile up; each day needs
+    to be its own containing block for one header to push out the last."""
+    _, get = _serve(tmp_path)
+    page = get("/t/saturday_squad/")
+    assert "daygroup" in page
+    assert ".daygroup{position:relative}" in page

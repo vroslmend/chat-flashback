@@ -233,7 +233,9 @@ opens a Messenger-style reader:
 
 - Infinite-scroll feed grouped by day, newest or oldest first
 - Sender color chips, inline reactions, media thumbnails, shares and call messages
-- Photo/GIF thumbnails, inline video and audio players, and download links for files
+- Photo/GIF thumbnails, inline video and audio players, and download links for files.
+  Media that is not on disk says so in place of the thumbnail, rather than leaving a
+  blank message — most exports ship with only a fraction of their attachments
 - Reply threading, "N years ago" badges, subtle sentiment tint
 - Full-text search (with a `.*` regex toggle) and per-member filters
 - A jump-to-date control, an "On this day" view across the years, and a random-memory
@@ -263,6 +265,10 @@ sit side by side — `full send` ignores "send me the full list". Emoji are inde
 as words, so `😂` works the same way, and so does `😂😂` or `lol 😂`. Punctuation
 and capitals are ignored, and a phrase may be built entirely out of stopwords
 (`the end` is a fair question even though `the` is not).
+
+"Show all N in the feed" turns the reader into every message holding that word,
+oldest first, grouped by day. Click any one of them and the feed opens the whole
+conversation around it, so you can read what the word was actually about.
 
 The index is built once at startup and lives in memory. On a 1.79M-message chat
 it takes about 30 seconds and peaks near 180 MB while building, for 140,755
