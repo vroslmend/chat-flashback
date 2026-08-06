@@ -30,6 +30,15 @@ Runs locally. Your data is not uploaded anywhere.
 - What the chat was about. TF-IDF topic words per year.
 - Running jokes. Repeated phrases that look like inside jokes (frequency, members, years).
 - Year in review. A page per year (monthly activity, top words/emojis, jokes) plus an index.
+- Group history. Every name the group gave itself and every nickname it gave its
+  members, as dated ranges, read back out of Messenger's own event messages.
+- Member pages. One per member: their years, the words that set each of their years
+  apart from their own others, who they answer, and their most-reacted messages.
+- Relationships. Pairs by year, pairs that drifted, who speaks first after a day of
+  silence, who gets the last word, and who goes unanswered most.
+- Eras. The chat cut into periods where its volume or its vocabulary turned over,
+  each named for the word it uses most out of proportion, plus the words the chat
+  picked up and stopped saying each year.
 - Message-length and word trends over time.
 - Sentiment (VADER). Average mood per member and per year.
 - Weirdest statements. All-caps, 3am, punctuation-spiral, and extreme-length messages.
@@ -104,13 +113,15 @@ Options:
 | `--no-index` | Skip the word-search index when serving. Starts faster; the word explorer is unavailable |
 | `--tz` | Timezone for analysis, e.g. `+03:00` or `America/New_York` (Messenger timestamps are UTC; default is your system timezone) |
 | `--config` | JSON config file with any of the options above |
-| `--skip` | Skip analyses: `jokes`, `sentiment`, `wordcloud`, `topics` (comma-separated) |
+| `--skip` | Skip analyses: `jokes`, `sentiment`, `wordcloud`, `topics`, `narratives` (comma-separated) |
 | `--progress` | Show phase progress while analyzing |
 | `--incremental` | Skip threads that are unchanged since the last run |
 | `--check` | Validate the export instead of analyzing (always exits 0) |
 
-Writes `summary.md`, `report.html`, PNG charts, and `year_<year>.html` year-in-review
-pages into `output/<thread>/`.
+Writes `summary.md`, `report.html`, PNG charts, `year_<year>.html` year-in-review
+pages, `group_history.html`, `relationships.html`, `eras.html` and a
+`member_<name>.html` per member into `output/<thread>/`. Every page is linked from
+the report's top bar.
 
 ### Config file
 
@@ -130,6 +141,36 @@ Pass options in a JSON file instead of on the command line. CLI flags still win.
 ```bash
 python analyze_chat.py --config config.json
 ```
+
+### Group history, relationships and eras
+
+Three pages sit beside the report, plus one page per member.
+
+**Group history** reads back the messages Messenger writes about the group itself
+— renames, nicknames, joins and removals. They are dropped from the vocabulary
+(otherwise "named the group" ranks as a running joke said by everyone for years),
+but they are a record nobody has read: on a nine-year chat, 520 group names and
+369 nickname changes. Nicknames are shown as dated ranges, because the question
+people ask is what someone was called in 2021, not when a name was set.
+
+**Relationships** counts a pair's interactions — a reply inside the hour, or a
+reaction — per year, and flags a pair as drifted when its share of either
+member's own interaction moves by more than half between the pair's peak year and
+the most recent year the export covers end to end. The share is what makes it
+drift rather than the chat simply going quiet. It also reports who speaks first
+after a day of silence, who gets the last word, and whose messages go unanswered,
+as a share of their own messages so the loudest member does not win by volume.
+
+**Eras** cuts the chat into periods. The rule: a month opens a new era when the
+three months from it carry less than half or more than double the messages of the
+three before it, or when fewer than a third of the previous quarter's top words
+survive into this one. Quarters too small to have a character of their own cannot
+open an era, and eras shorter than six months are merged into their neighbour. An
+era is named for the word it uses most out of proportion to the rest of the chat,
+which is not the same as its most common word — on a real chat, tf-idf named four
+eras out of five after the chat's single commonest word. Underneath it, the words
+the chat first said and last said each year, which is the plainest version of the
+same story.
 
 ### Non-English chats
 

@@ -37,7 +37,7 @@ DEFAULT_OUTPUT = "output"
 # Analyses that can be turned off with --skip. "jokes" dominates peak memory
 # (it counts every 2-4 word phrase in the chat) and "sentiment" is the slowest,
 # so those two are what to drop on a very large chat or a small machine.
-SKIPPABLE = ("jokes", "sentiment", "wordcloud", "topics")
+SKIPPABLE = ("jokes", "sentiment", "wordcloud", "topics", "narratives")
 REPLY_WINDOW_SECONDS = 60 * 60
 CONVERSATION_WINDOW_SECONDS = 30 * 60
 MESSAGE_FILE_RE = re.compile(r"^message_\d+\.json$")
@@ -2573,6 +2573,219 @@ t.onclick=function(){{var dark=document.body.dataset.theme!=='dark';document.bod
 </body></html>"""
 
 
+_NARRATIVE_PAGES = [("report.html", "Report"), ("year_in_review.html", "Years"),
+                    ("group_history.html", "Group history"),
+                    ("relationships.html", "Relationships"), ("eras.html", "Eras")]
+
+
+def _narrative_page(title, current, heading, subtitle, body):
+    """One of the narrative pages, in the same frame as the year pages."""
+    links = "".join(f'<a href="{href}">{label}</a>'
+                    for href, label in _NARRATIVE_PAGES if href != current)
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html_lib.escape(title)} - {html_lib.escape(heading.lower())}</title>
+<style>{_YEAR_PAGE_CSS}</style>
+</head><body>
+<div class="topbar"><span class="brand">{html_lib.escape(title)} flashback</span>
+{links}
+<button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
+<main>
+<h1>{html_lib.escape(heading)}</h1>
+<p class="muted">{subtitle}</p>
+{body}
+</main>
+<script>
+var t=document.getElementById('theme');
+t.onclick=function(){{var dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';t.textContent=dark?'Light':'Dark';}};
+</script>
+</body></html>"""
+
+
+def _rows(columns, rows):
+    """A table, or nothing at all when there is nothing to put in it."""
+    if not rows:
+        return ""
+    return _table(columns, rows)
+
+
+def _group_history_html(title, history):
+    esc = html_lib.escape
+    names = _rows(["Name", "From", "Until", "Set by"],
+                  [(f"<b>{esc(n['name'])}</b>", n["date"], n["until"] or "still current",
+                    esc(n["by"])) for n in reversed(history["names"])])
+    nick_blocks = []
+    for member, entries in history["nicknames"].items():
+        rows = [(esc(e["nickname"]), e["from"], e["until"] or "still current", esc(e["by"]))
+                for e in reversed(entries)]
+        nick_blocks.append(f"<h3>{esc(member_label(member))}</h3>"
+                           + _rows(["Nickname", "From", "Until", "Set by"], rows))
+    membership = _rows(["Date", "What", "Who"],
+                       [(e["date"], history["labels"].get(e["kind"], e["kind"]),
+                         esc(e["target"] if e["kind"] in ("added", "removed") else e["actor"]))
+                        for e in history["membership"]])
+    busiest = _rows(["Member", "Changes"],
+                    [(esc(member_label(m)), f"{c:,}") for m, c in history["busiest"].most_common(10)])
+    kinds = _rows(["Kind", "Times"],
+                  [(esc(history["labels"].get(k, k)), f"{c:,}")
+                   for k, c in history["kinds"].most_common()])
+    body = "".join([
+        _sec("names", "What the group has called itself", names or "<p>No renames.</p>"),
+        _sec("nicknames", "Nicknames", "".join(nick_blocks) or "<p>No nicknames.</p>"),
+        _sec("who", "Who changes things", busiest + kinds),
+        _sec("membership", "Comings and goings", membership or "<p>Nobody joined or left.</p>"),
+    ])
+    current = history["current_name"] or "-"
+    subtitle = (f"{history['total']:,} changes the group made to itself. "
+                f"Currently called <b>{esc(current)}</b>.")
+    return _narrative_page(title, "group_history.html", "Group history", subtitle, body)
+
+
+def _relationships_html(title, rel):
+    esc = html_lib.escape
+    years = sorted({y for p in rel["all_pairs"] for y in p["by_year"]})
+    head = ["Pair", "Interactions"] + [str(y) for y in years]
+    pair_rows = []
+    for p in rel["pairs"]:
+        cells = [esc(" + ".join(member_label(n) for n in p["pair"])), f"{p['total']:,}"]
+        cells += [f"{p['by_year'].get(y, 0):,}" for y in years]
+        pair_rows.append(tuple(cells))
+    drift_rows = [(esc(" + ".join(member_label(n) for n in d["pair"])),
+                   esc(member_label(d["member"])), str(d["peak_year"]),
+                   f"{d['was_pct']}%", f"{d['now_pct']}%", f"{d['change_pct']:+.0f}%")
+                  for d in rel["drift"][:20]]
+    silence = _rows(["Member", "Times"],
+                    [(esc(member_label(m)), str(c))
+                     for m, c in rel["first_after_silence"].most_common(10)])
+    last = _rows(["Member", "Sessions ended"],
+                 [(esc(member_label(m)), f"{c:,}") for m, c in rel["last_word"].most_common(10)])
+    ignored = _rows(["Member", "Unanswered", "Messages", "Share"],
+                    [(esc(member_label(r["member"])), f"{r['unanswered']:,}",
+                      f"{r['messages']:,}", f"{r['pct']}%") for r in rel["ignored"]])
+    recent = rel["full_years"][-1] if rel["full_years"] else None
+    drift_note = (f"<p class='muted'>Share of that member's own interaction, from the pair's "
+                  f"peak year to {recent}, the most recent year the export covers end to end. "
+                  f"Pairs under {rel['min_interactions']} interactions in their peak year are "
+                  f"left out.</p>" if recent else "")
+    body = "".join([
+        _sec("pairs", "Who interacts with whom",
+             "<p class='muted'>A reply inside the hour, or a reaction.</p>"
+             + _rows(head, pair_rows)),
+        _sec("drift", "Pairs that drifted",
+             drift_note + (_rows(["Pair", "Member", "Peak", "Then", "Now", "Change"], drift_rows)
+                           or "<p>No pair moved by more than half.</p>")),
+        _sec("silence", "First to speak after a day of silence", silence),
+        _sec("lastword", "Who gets the last word", last),
+        _sec("ignored", "Who goes unanswered",
+             "<p class='muted'>Share of a member's own messages that nobody answered within "
+             "the hour, so the loudest member does not win by volume.</p>" + ignored),
+    ])
+    return _narrative_page(title, "relationships.html", "Relationships",
+                           f"{len(rel['members'])} members, "
+                           f"{len(rel['all_pairs'])} pairs that ever interacted.", body)
+
+
+def _eras_html(title, eras, turnover):
+    esc = html_lib.escape
+    cards = "".join(
+        f"<div class='card'><b>{esc(e['name'])}</b>"
+        f"<span>{e['start']} to {e['end']} &middot; {e['messages']:,} messages</span></div>"
+        for e in eras["eras"])
+    era_rows = [(f"<b>{esc(e['name'])}</b>", f"{e['start']} to {e['end']}", str(e["months"]),
+                 f"{e['messages']:,}", esc(member_label(e["top_member"] or "-")),
+                 esc(", ".join(w["word"] for w in e["words"])))
+                for e in eras["eras"]]
+    born_rows = []
+    for year in turnover["years"]:
+        born = ", ".join(w["word"] for w in turnover["born"].get(year, []))
+        died = ", ".join(w["word"] for w in turnover["died"].get(year, []))
+        if born or died:
+            born_rows.append((str(year), esc(born) or "-", esc(died) or "-"))
+    era_block = (_rows(["Era", "Span", "Months", "Messages", "Loudest", "Words it made its own"],
+                       era_rows)
+                 if eras["eras"] else
+                 f"<p>{esc(eras.get('reason') or 'Not enough history to segment.')}</p>")
+    body = "".join([
+        _sec("eras", "Eras",
+             "<p class='muted'>A month opens a new era when the three months from it carry "
+             "less than half or more than double the messages of the three before it, or when "
+             "fewer than a third of the previous quarter's top words survive into this one. "
+             "Each era is named for the word it uses most out of proportion to the rest of "
+             "the chat.</p>"
+             + (f"<div class='cards'>{cards}</div>" if cards else "") + era_block),
+        _sec("turnover", "Words born and words that died",
+             "<p class='muted'>A word is born the year it is first said and dies the year it "
+             "is last said. Every word alive at the end would die in the final year, so that "
+             "year is left out.</p>"
+             + _rows(["Year", "First said", "Last said"], born_rows)),
+    ])
+    span = (f"{eras['months'][0]} to {eras['months'][-1]}" if eras.get("months") else "")
+    count = len(eras["eras"])
+    return _narrative_page(title, "eras.html", "Eras",
+                           f"{count} period{'' if count == 1 else 's'} across {span}.", body)
+
+
+def _member_page_html(title, profile):
+    esc = html_lib.escape
+    member = profile["member"]
+    cards = "".join([
+        f"<div class='card'><b>{profile['total']:,}</b><span>messages</span></div>",
+        f"<div class='card'><b>{profile['share']}%</b><span>of the chat</span></div>",
+        f"<div class='card'><b>{profile['peak_year']}</b><span>peak year</span></div>",
+        f"<div class='card'><b>{profile['active_days']:,}</b><span>days spoken on</span></div>",
+    ])
+    year_rows = [(str(y), f"{c:,}",
+                  esc(", ".join(w["word"] for w in profile["words_by_year"].get(y, []))))
+                 for y, c in sorted(profile["by_year"].items())]
+    closest = _rows(["Member", "Replies"],
+                    [(esc(member_label(n)), f"{c:,}") for n, c in profile["closest"]])
+    talk_years = sorted(profile["talks_to"])
+    others = sorted({n for row in profile["talks_to"].values() for n in row})
+    talk_rows = [tuple([esc(member_label(other))]
+                       + [f"{profile['talks_to'][y].get(other, 0):,}" for y in talk_years])
+                 for other in others]
+    reacted = "".join(
+        f"<li>{len(m['reactions'])} reactions &middot; {m['dt'].strftime('%Y-%m-%d')} &middot; "
+        f"&quot;{esc(_shorten(m['content'], 90))}&quot;</li>"
+        for m in profile["top_reacted"])
+    body = "".join([
+        f"<div class='cards'>{cards}</div>",
+        _sec("years", "Year by year",
+             "<p class='muted'>The words are what set that year apart from this member's own "
+             "other years, not what they said most.</p>"
+             + _rows(["Year", "Messages", "Words of that year"], year_rows)),
+        _sec("closest", "Who they answer", closest
+             + _rows(["Member"] + [str(y) for y in talk_years], talk_rows)),
+        _sec("reacted", "Their most-reacted messages",
+             f"<ul>{reacted}</ul>" if reacted else "<p>Nobody ever reacted to them.</p>"),
+    ])
+    return _narrative_page(title, None, member_label(member),
+                           f"Active {profile['first']} to {profile['last']}.", body)
+
+
+def write_narrative_pages(title, analyses, out_dir):
+    """The group's history, its pairs, its eras, and a page per member."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    history = analyses.get("group_history")
+    if history:
+        (out_dir / "group_history.html").write_text(
+            _group_history_html(title, history), encoding="utf-8")
+    rel = analyses.get("relationships")
+    if rel:
+        (out_dir / "relationships.html").write_text(
+            _relationships_html(title, rel), encoding="utf-8")
+    eras = analyses.get("eras")
+    if eras:
+        (out_dir / "eras.html").write_text(
+            _eras_html(title, eras, analyses.get("turnover") or {"years": [], "born": {}, "died": {}}),
+            encoding="utf-8")
+    for member, profile in (analyses.get("member_profiles") or {}).items():
+        if profile:
+            (out_dir / f"member_{_slug(member)}.html").write_text(
+                _member_page_html(title, profile), encoding="utf-8")
+
+
 def _js_msg(m):
     if m is None:
         return None
@@ -2727,7 +2940,15 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
     def cell(name):
         return html_lib.escape(member_label(name))
 
-    leader_rows = [(cell(m), f"{c:,}", f"{100 * c / max(1, stats['total']):.1f}%")
+    profiles = analyses.get("member_profiles") or {}
+
+    def member_cell(name):
+        """Linked to that member's page, when one was written for them."""
+        if profiles.get(name):
+            return f"<a href='member_{_slug(name)}.html'>{cell(name)}</a>"
+        return cell(name)
+
+    leader_rows = [(member_cell(m), f"{c:,}", f"{100 * c / max(1, stats['total']):.1f}%")
                    for m, c in stats["member_msgs"].most_common(top)]
     reactor_rows = [(cell(m), f"{c:,}") for m, c in react["reactor"].most_common(top)]
 
@@ -2742,7 +2963,7 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
     # in one file" was in fact a subset of it.
     personality = analyses.get("personality")
     if personality:
-        rows = [(cell(m), f"{p['total_msgs']:,}", str(p["avg_words"]),
+        rows = [(member_cell(m), f"{p['total_msgs']:,}", str(p["avg_words"]),
                  f"{p['peak_hour']}:00", f"{p['night_pct']}%",
                  html_lib.escape(p["signature"] or "-"),
                  " ".join(p["top_emojis"]) or "-")
@@ -2942,9 +3163,18 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
         f"<div class='card'><b>{html_lib.escape(value)}</b>"
         f"<span>{html_lib.escape(label.lower())}</span></div>"
         for label, value in all_time_totals(stats, analyses))
+    # The sibling pages, linked only when the run actually wrote them.
+    written = {"year_in_review.html": True,
+               "group_history.html": bool(analyses.get("group_history")),
+               "relationships.html": bool(analyses.get("relationships")),
+               "eras.html": bool(analyses.get("eras"))}
+    extra_pages = '<span class="pages">' + "".join(
+        f'<a class="years" href="{href}">{label}</a>'
+        for href, label in _NARRATIVE_PAGES
+        if href != "report.html" and written.get(href)) + "</span>"
     body = f"""<div class="topbar"><span class="brand">{html_lib.escape(title)} flashback</span>
 <nav>{nav}</nav>
-<a class="years" href="year_in_review.html">Years</a>
+{extra_pages}
 <button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
 <main>
 <h1>{html_lib.escape(title)} flashback</h1>
@@ -2972,7 +3202,8 @@ body{{font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;padding:0 0 60px
 nav{{display:flex;gap:4px;flex-wrap:wrap;flex:1}}
 nav a{{color:var(--muted);text-decoration:none;font-size:12px;padding:4px 8px;border-radius:6px}}
 nav a:hover{{background:var(--border);color:var(--fg)}}
-.years{{margin-left:auto;color:var(--muted);text-decoration:none;font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px}}
+.pages{{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}}
+.years{{color:var(--muted);text-decoration:none;font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px}}
 #theme{{border:1px solid var(--border);background:var(--bg);color:var(--fg);border-radius:6px;padding:4px 10px;cursor:pointer}}
 main{{max-width:1040px;margin:0 auto;padding:0 20px}}
 h1{{font-size:26px;margin-bottom:4px}}
@@ -3155,6 +3386,32 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates, top=1
                                         "per_member": dict(d["per_member"]),
                                         "by_year": dict(d["by_year"])}
                                     for t, d in analyses["track"].items()}
+    history = analyses.get("group_history")
+    if history:
+        payload["group_history"] = {
+            "current_name": history["current_name"],
+            "names": history["names"],
+            "nicknames": history["nicknames"],
+            "membership": history["membership"],
+            "busiest": dict(history["busiest"].most_common(top)),
+            "kinds": dict(history["kinds"])}
+    rel = analyses.get("relationships")
+    if rel:
+        payload["relationships"] = {
+            "pairs": rel["all_pairs"], "drift": rel["drift"],
+            "first_after_silence": dict(rel["first_after_silence"]),
+            "last_word": dict(rel["last_word"]), "ignored": rel["ignored"]}
+    if analyses.get("eras"):
+        payload["eras"] = analyses["eras"]["eras"]
+    if analyses.get("turnover"):
+        payload["vocabulary_turnover"] = {"born": analyses["turnover"]["born"],
+                                          "died": analyses["turnover"]["died"]}
+    if analyses.get("member_profiles"):
+        # The messages a member's most-reacted list holds are whole message
+        # dicts; the JSON keeps the arc, not the message objects.
+        payload["members"] = {
+            member: {k: v for k, v in p.items() if k != "top_reacted"}
+            for member, p in analyses["member_profiles"].items() if p}
     (out_dir / "summary.json").write_text(
         json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -3321,6 +3578,16 @@ def process_thread(thread_dir, args):
     if "jokes" not in skip:
         _progress(args, "running jokes")
         analyses["jokes"] = inside_jokes(msgs, names=names)
+    if "narratives" not in skip:
+        # Imported here rather than at the top: chatstats reads constants from
+        # this module while it is still being defined if both import eagerly.
+        import chatstats
+        _progress(args, "narratives")
+        analyses["group_history"] = chatstats.group_history(msgs)
+        analyses["relationships"] = chatstats.relationships(msgs, top=args.top)
+        analyses["eras"] = chatstats.eras(msgs, names=names)
+        analyses["turnover"] = chatstats.vocabulary_turnover(msgs, names=names)
+        analyses["member_profiles"] = chatstats.member_profiles(msgs, names=names)
 
     out_dir = Path(args.output) / _slug(title)
     _progress(args, "charts")
@@ -3332,6 +3599,7 @@ def process_thread(thread_dir, args):
                       [oldest[:10], newest[:10]], top=args.top, charts=charts)
     _progress(args, "year reviews")
     write_year_reviews(title, stats, analyses, out_dir)
+    write_narrative_pages(title, analyses, out_dir)
     if args.json:
         write_summary_json(title, stats, analyses, out_dir, anonymized,
                            [oldest[:10], newest[:10]], top=args.top)
@@ -3723,4 +3991,11 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    # Run as a script, this module lives in sys.modules as "__main__" only, so
+    # `import analyze_chat` from chatstats or wordindex would load a second,
+    # separate copy of it. Everything they then read is that copy's: the
+    # stopwords --stopwords-file added at runtime are on this one, and their
+    # word lists silently came back unfiltered. Registering the running module
+    # under its own name makes every importer share it.
+    sys.modules.setdefault("analyze_chat", sys.modules["__main__"])
     sys.exit(main())

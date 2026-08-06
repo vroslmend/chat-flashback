@@ -272,3 +272,108 @@ def test_top_flag_controls_the_word_and_emoji_charts(tmp_path, monkeypatch):
     generate(tmp_path, msgs, "--top", "3")
     assert len(drawn["Top words"]) == 3
     assert len(drawn["Top emojis"]) == 3
+
+
+# --------------------------------------------------------------------------- #
+# narrative pages                                                              #
+# --------------------------------------------------------------------------- #
+
+def test_the_report_links_every_narrative_page_it_wrote(tmp_path):
+    out = generate(tmp_path, chatter())
+    report = (out / "report.html").read_text(encoding="utf-8")
+    for page in ["group_history.html", "relationships.html", "eras.html"]:
+        assert (out / page).is_file()
+        assert f'href="{page}"' in report
+
+
+def test_a_page_is_written_for_every_member(tmp_path):
+    out = generate(tmp_path, chatter())
+    report = (out / "report.html").read_text(encoding="utf-8")
+    for member in ("alice", "bob"):
+        assert (out / f"member_{member}.html").is_file()
+        assert f"member_{member}.html" in report
+
+
+def test_the_member_page_reports_their_own_years(tmp_path):
+    msgs = chatter() + [raw("Alice", BASE.replace(year=2021), "cricket again next year")]
+    out = generate(tmp_path, msgs)
+    page = (out / "member_alice.html").read_text(encoding="utf-8")
+    assert "2020" in page and "2021" in page
+    assert "Active 2020-01-01 to 2021-01-01" in page
+
+
+def test_the_group_history_page_reads_back_messenger_events(tmp_path):
+    msgs = chatter() + [
+        raw("Alice", BASE + timedelta(days=1), "Alice named the group squad goals."),
+        raw("Alice", BASE + timedelta(days=2),
+            "Alice set the nickname for Bob to speed racer."),
+    ]
+    page = (generate(tmp_path, msgs) / "group_history.html").read_text(encoding="utf-8")
+    assert "squad goals" in page
+    assert "speed racer" in page
+    assert "Currently called" in page
+
+
+def test_group_events_stay_out_of_the_vocabulary_they_are_reported_from(tmp_path):
+    """The page reads them; the word counts still must not."""
+    msgs = chatter() + [raw("Alice", BASE + timedelta(days=1),
+                            "Alice named the group squad goals.")]
+    out = generate(tmp_path, msgs)
+    assert "squad goals" in (out / "group_history.html").read_text(encoding="utf-8")
+    assert "squad" not in topics_of(out)
+
+
+def test_the_eras_page_explains_its_own_rule(tmp_path):
+    page = (generate(tmp_path, chatter()) / "eras.html").read_text(encoding="utf-8")
+    assert "opens a new era" in page
+    assert "born" in page.lower()
+
+
+def test_narratives_can_be_skipped(tmp_path):
+    out = generate(tmp_path, chatter(), "--skip", "narratives")
+    assert not (out / "eras.html").exists()
+    assert not (out / "member_alice.html").exists()
+    assert 'href="eras.html"' not in (out / "report.html").read_text(encoding="utf-8")
+
+
+def test_summary_json_carries_the_narratives(tmp_path):
+    msgs = chatter() + [
+        raw("Alice", BASE + timedelta(days=1), "Alice named the group squad goals."),
+    ]
+    out = generate(tmp_path, msgs, "--json")
+    payload = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    assert payload["group_history"]["current_name"] == "squad goals"
+    assert payload["relationships"]["pairs"]
+    assert "Alice" in payload["members"]
+    assert "top_reacted" not in payload["members"]["Alice"]
+
+
+def test_extra_stopwords_reach_the_narrative_pages(tmp_path):
+    """Run as a script, analyze_chat is `__main__`, and chatstats importing it
+    by name used to get a second copy whose STOPWORDS never saw
+    --stopwords-file. Member pages then listed the very words the user asked to
+    drop. Only a subprocess reproduces it: under pytest the module is imported
+    normally and there is only ever one copy."""
+    import os
+    import subprocess
+    import sys as _sys
+    from pathlib import Path
+
+    msgs = [raw("Alice" if i % 2 else "Bob", BASE + timedelta(minutes=i),
+                "cricket practice again") for i in range(30)]
+    thread = write_export(tmp_path, msgs)
+    stops = tmp_path / "stops.txt"
+    stops.write_text("cricket\n", encoding="utf-8")
+    out = tmp_path / "out"
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    result = subprocess.run(
+        [_sys.executable, "analyze_chat.py", "--input", str(thread),
+         "--output", str(out), "--stopwords-file", str(stops),
+         "--skip", "jokes,sentiment,wordcloud"],
+        capture_output=True, text=True, env=env,
+        cwd=str(Path(ac.__file__).resolve().parent))
+    assert result.returncode == 0, result.stderr
+    page = (out / ac._slug(THREAD) / "member_alice.html").read_text(encoding="utf-8")
+    words = page.split("Words of that year")[1]
+    assert "practice" in words
+    assert "cricket" not in words
