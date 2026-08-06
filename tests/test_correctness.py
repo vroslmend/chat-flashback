@@ -43,6 +43,46 @@ def test_tokenize_drops_bare_numbers():
 
 
 # --------------------------------------------------------------------------- #
+# text decoding                                                                #
+# --------------------------------------------------------------------------- #
+
+def test_decode_repairs_mojibake_already_parsed_by_json():
+    """The common real-export case: json.loads has already turned the escapes
+    into characters, so there is no "\\u00" left to look for."""
+    mangled = "\U0001f621".encode("utf-8").decode("latin1")
+    assert mangled != "\U0001f621"
+    assert ac.decode_messenger_text(mangled) == "\U0001f621"
+
+
+def test_decode_still_repairs_literal_escape_form():
+    assert ac.decode_messenger_text("\\u00f0\\u009f\\u0091\\u008d") == "\U0001f44d"
+
+
+def test_decode_leaves_plain_and_real_unicode_alone():
+    assert ac.decode_messenger_text("hello there") == "hello there"
+    assert ac.decode_messenger_text("مرحبا") == "مرحبا"
+    assert ac.decode_messenger_text(None) is None
+    assert ac.decode_messenger_text("") == ""
+
+
+def test_decode_leaves_latin1_text_that_is_not_utf8_alone():
+    """'café' is valid Latin-1 but not valid UTF-8, so it must survive."""
+    assert ac.decode_messenger_text("café") == "café"
+
+
+def test_mangled_emoji_are_counted_after_normalization():
+    raw = [{"sender_name": "Alice", "timestamp_ms": 1609459200000,
+            "content": "\U0001f621".encode("utf-8").decode("latin1")},
+           {"sender_name": "Bob", "timestamp_ms": 1609459200001, "content": "plain",
+            "reactions": [{"reaction": "❤".encode("utf-8").decode("latin1"),
+                           "actor": "Alice"}]}]
+    msgs = ac.normalize_messages(raw)
+    assert msgs[0]["content"] == "\U0001f621"
+    assert ac.split_emojis(msgs[0]["content"]) == ["\U0001f621"]
+    assert msgs[1]["reactions"] == [("Alice", "❤")]
+
+
+# --------------------------------------------------------------------------- #
 # topic words                                                                  #
 # --------------------------------------------------------------------------- #
 

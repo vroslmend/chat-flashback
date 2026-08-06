@@ -116,18 +116,30 @@ def find_thread_dirs(root):
 
 
 def decode_messenger_text(text):
-    """Fix Messenger's double-encoded unicode (literal \\u00xx escapes of UTF-8 bytes).
+    """Repair Messenger's mis-encoded text.
 
-    A double-encoded emoji arrives as the text "\\u00f0\\u009f\\u0091\\u008d".
-    Convert each escape to its byte value, then decode the bytes as UTF-8.
+    Messenger writes UTF-8 bytes as if each were a Latin-1 code point, so an
+    emoji arrives as several characters in U+0000-U+00FF: "\U0001f621" becomes
+    U+00F0 U+009F U+0098 U+00A1. Round-tripping back through Latin-1 recovers
+    the original character.
+
+    Exports differ in how far that mangling has already been undone. Some
+    escape the bytes as literal "\\u00xx" text, which survives json.loads as
+    backslashes; others hand over the characters directly, already decoded by
+    the parser. Checking only for the escapes misses the second kind entirely,
+    which is most of them, so handle both.
     """
-    if not text or "\\u00" not in text:
+    if not text:
         return text
-    fixed = re.sub(r"\\u00([0-9a-fA-F]{2})", lambda m: chr(int(m.group(1), 16)), text)
-    if any(ord(c) > 0xFF for c in fixed):
+    candidate = text
+    if "\\u00" in candidate:
+        candidate = re.sub(r"\\u00([0-9a-fA-F]{2})",
+                           lambda m: chr(int(m.group(1), 16)), candidate)
+    # Anything above U+00FF is genuine unicode that was decoded correctly.
+    if any(ord(c) > 0xFF for c in candidate):
         return text
     try:
-        return fixed.encode("latin1").decode("utf-8")
+        return candidate.encode("latin1").decode("utf-8")
     except (UnicodeDecodeError, UnicodeEncodeError):
         return text
 
