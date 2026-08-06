@@ -12,30 +12,41 @@ import analyze_chat as ac
 SAMPLE = str(Path(__file__).resolve().parents[1] / "sample_data")
 
 
-def test_server_endpoints(tmp_path):
-    import json as _json
-
+def _raw_messages():
     msgs = []
     for i in range(1, 5):
-        data = _json.load(open(f"{SAMPLE}/message_{i}.json", encoding="utf-8"))
+        data = json.load(open(f"{SAMPLE}/message_{i}.json", encoding="utf-8"))
         msgs.extend(data["messages"])
-    norm = ac.normalize_messages(msgs)
+    return msgs
+
+
+def _serve(tmp_path, build_index=True):
+    """Start the reader on a free port against sample_data; return (port, get)."""
+    import urllib.request
+
     threads = [{"slug": "saturday_squad", "title": "Saturday Squad",
-                "thread_dir": SAMPLE, "msgs": norm}]
+                "thread_dir": SAMPLE,
+                "msgs": ac.normalize_messages(_raw_messages())}]
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
     sock.close()
-    server = threading.Thread(target=run_server, args=(threads, port, tmp_path), daemon=True)
-    server.start()
+    threading.Thread(target=run_server, args=(threads, port, tmp_path),
+                     kwargs={"build_index": build_index}, daemon=True).start()
     wait_for_server(port)
-
-    import urllib.request
-    from urllib.parse import quote
 
     def get(path):
         with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}") as r:
             return r.read().decode("utf-8")
+
+    return port, get
+
+
+def test_server_endpoints(tmp_path):
+    from urllib.parse import quote
+
+    msgs = _raw_messages()
+    _, get = _serve(tmp_path)
 
     landing = get("/")
     assert "chat-flashback" in landing and "saturday_squad" in landing
@@ -68,3 +79,96 @@ def test_server_endpoints(tmp_path):
     assert rex["search"] and rex["total_matches"] >= 1
     bad_re = json.loads(get("/t/saturday_squad/api/messages?q=%5B&re=1&limit=5"))
     assert bad_re["search"] is True
+
+
+def test_word_endpoint_returns_a_profile(tmp_path):
+    _, get = _serve(tmp_path)
+    body = json.loads(get("/t/saturday_squad/api/word?q=shawarma"))
+    assert body["word"] == "shawarma"
+    assert body["uses"] == 5
+    assert body["per_member"]
+    assert body["examples"]["first"]["index"] is not None
+
+
+def test_word_endpoint_404s_on_an_unknown_word(tmp_path):
+    import urllib.error
+    _, get = _serve(tmp_path)
+    try:
+        get("/t/saturday_squad/api/word?q=zzzznotaword")
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+    else:
+        raise AssertionError("expected 404")
+
+
+def test_suggest_endpoint_completes_a_prefix(tmp_path):
+    _, get = _serve(tmp_path)
+    assert "bro" in json.loads(get("/t/saturday_squad/api/suggest?q=br"))["words"]
+
+
+def test_word_endpoint_resolves_a_phrase(tmp_path):
+    from urllib.parse import quote
+    _, get = _serve(tmp_path)
+    body = json.loads(get("/t/saturday_squad/api/word?q=" + quote("shawarma spot")))
+    assert body["word"] == "shawarma spot"
+    assert body["is_phrase"] is True
+    assert body["uses"] == 1
+    assert "shawarma" in body["examples"]["first"]["content"]
+
+
+def test_viewer_ships_the_word_panel(tmp_path):
+    _, get = _serve(tmp_path)
+    page = get("/t/saturday_squad/")
+    assert 'id="wordpanel"' in page
+    assert 'id="wordq"' in page
+
+
+def test_word_endpoint_reports_a_disabled_index(tmp_path):
+    import urllib.error
+    _, get = _serve(tmp_path, build_index=False)
+    try:
+        get("/t/saturday_squad/api/word?q=shawarma")
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 503
+    else:
+        raise AssertionError("expected 503")
+
+
+def test_word_hits_list_every_mention_oldest_first(tmp_path):
+    _, get = _serve(tmp_path)
+    body = json.loads(get("/t/saturday_squad/api/word/hits?q=shawarma"))
+    assert body["total"] == 5
+    assert len(body["messages"]) == 5
+    assert body["next_offset"] is None
+    stamps = [m["ts"] for m in body["messages"]]
+    assert stamps == sorted(stamps)
+    assert all("shawarma" in m["content"].lower() for m in body["messages"])
+
+
+def test_word_hits_page_through_a_word(tmp_path):
+    _, get = _serve(tmp_path)
+    first = json.loads(get("/t/saturday_squad/api/word/hits?q=shawarma&limit=2"))
+    assert len(first["messages"]) == 2 and first["next_offset"] == 2
+    second = json.loads(
+        get("/t/saturday_squad/api/word/hits?q=shawarma&limit=2&offset=2"))
+    assert second["messages"][0]["ts"] > first["messages"][-1]["ts"]
+
+
+def test_word_hits_404s_on_an_unknown_word(tmp_path):
+    import urllib.error
+    _, get = _serve(tmp_path)
+    try:
+        get("/t/saturday_squad/api/word/hits?q=zzzznotaword")
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+    else:
+        raise AssertionError("expected 404")
+
+
+def test_the_viewer_groups_each_day_so_headers_cannot_stack(tmp_path):
+    """Sticky siblings all stop at the same offset and pile up; each day needs
+    to be its own containing block for one header to push out the last."""
+    _, get = _serve(tmp_path)
+    page = get("/t/saturday_squad/")
+    assert "daygroup" in page
+    assert ".daygroup{position:relative}" in page

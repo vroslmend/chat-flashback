@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 import analyze_chat as ac
+from wordindex import WordIndex
 
 _PAGE_SIZE = 400
 
@@ -27,7 +28,7 @@ def _snippet(text, n=90):
 
 
 class ThreadIndex:
-    def __init__(self, slug, title, thread_dir, msgs):
+    def __init__(self, slug, title, thread_dir, msgs, build_index=True):
         self.slug = slug
         self.title = title
         self.thread_dir = Path(thread_dir)
@@ -49,6 +50,10 @@ class ThreadIndex:
             dt = m["dt"]
             self.by_monthday.setdefault((dt.month, dt.day), []).append(i)
         self._sent_cache = {}
+        # The word explorer's inverted index. Built here rather than lazily so
+        # the cost lands at startup, where it is announced, instead of on the
+        # first search.
+        self.words = WordIndex(msgs) if build_index else None
 
     def to_json(self, idx):
         m = self.msgs[idx]
@@ -286,6 +291,12 @@ def make_handler(threads, output_dir):
                         return self._day(thread, query)
                     if len(sub) >= 2 and sub[1] == "random":
                         return self._json(thread.random_memory())
+                    if len(sub) >= 3 and sub[1] == "word" and sub[2] == "hits":
+                        return self._word_hits(thread, query)
+                    if len(sub) >= 2 and sub[1] == "word":
+                        return self._word(thread, query)
+                    if len(sub) >= 2 and sub[1] == "suggest":
+                        return self._word_suggest(thread, query)
                     return self._json(thread.meta())
                 if sub[0] == "report.html":
                     report = output_dir / slug / "report.html"
@@ -351,6 +362,39 @@ your machine.</p>
                 return self._send(400, "date must be YYYY-MM-DD")
             return self._json(thread.day(month, day))
 
+        def _word(self, thread, query):
+            if thread.words is None:
+                return self._json({"error": "index disabled"}, 503)
+            q = (query.get("q") or [""])[0]
+            fold = (query.get("variants") or ["0"])[0] == "1"
+            profile = thread.words.profile(q, fold_variants=fold)
+            if profile is None:
+                return self._json({"error": "not found", "word": q}, 404)
+            return self._json(profile)
+
+        def _word_hits(self, thread, query):
+            """Every message holding the word, oldest first, a page at a time."""
+            if thread.words is None:
+                return self._json({"error": "index disabled"}, 503)
+            q = (query.get("q") or [""])[0]
+            fold = (query.get("variants") or ["0"])[0] == "1"
+            idxs = thread.words.matches(q, fold_variants=fold)
+            if not idxs:
+                return self._json({"error": "not found", "word": q}, 404)
+            offset = max(0, _read_int(query, "offset") or 0)
+            limit = min(_read_int(query, "limit") or _PAGE_SIZE, _PAGE_SIZE)
+            window = idxs[offset:offset + limit]
+            nxt = offset + limit
+            return self._json({"word": q, "total": len(idxs), "offset": offset,
+                               "next_offset": nxt if nxt < len(idxs) else None,
+                               "messages": [thread.to_json(i) for i in window]})
+
+        def _word_suggest(self, thread, query):
+            if thread.words is None:
+                return self._json({"words": []})
+            q = (query.get("q") or [""])[0]
+            return self._json({"words": thread.words.suggest(q)})
+
     return Handler
 
 
@@ -379,7 +423,11 @@ button{cursor:pointer}
 button.active{background:var(--me);color:#fff;border-color:var(--me)}
 .count{color:var(--muted);font-size:12px}
 main{max-width:760px;margin:0 auto;padding:0 16px 120px}
-.day{position:sticky;top:52px;z-index:10;display:flex;align-items:center;gap:10px;margin:22px 0 8px;font-size:12px;color:var(--muted)}
+/* Each day is its own containing block. Sticky siblings all stop at the same
+   offset and pile up on top of each other, so the headers have to be scoped to
+   the messages they belong to for one to push the last one out. */
+.daygroup{position:relative}
+.day{position:sticky;top:52px;z-index:10;display:flex;align-items:center;gap:10px;margin:22px 0 8px;padding:4px 0;font-size:12px;color:var(--muted);background:var(--bg)}
 .day::before,.day::after{content:"";flex:1;height:1px;background:var(--border)}
 .msg{display:flex;gap:10px;margin:2px 0;padding:4px 10px;border-radius:10px}
 .msg:hover{background:var(--hover)}
@@ -394,6 +442,10 @@ main{max-width:760px;margin:0 auto;padding:0 16px 120px}
 .unsent{text-decoration:line-through;opacity:.6}
 .media{margin:6px 0}
 .media img{max-width:220px;max-height:220px;border-radius:10px;border:1px solid var(--border);display:block}
+/* An export usually ships without most of its media. The file is gone, not the
+   message, so the bubble says so instead of rendering as a blank gap. */
+.media.gone{font-size:12px;color:var(--muted);border:1px dashed var(--border);border-radius:8px;padding:4px 8px;display:inline-block}
+.nocontent{font-size:12px;color:var(--muted);font-style:italic}
 .media video{max-width:280px;max-height:220px;border-radius:10px;border:1px solid var(--border);display:block}
 .media audio{width:280px;max-width:100%}
 .media a{color:#5b8ff9;word-break:break-all;font-size:13px}
@@ -406,6 +458,21 @@ main{max-width:760px;margin:0 auto;padding:0 16px 120px}
 .sent-neg{background:rgba(232,104,74,0.06)}
 .loader{text-align:center;color:var(--muted);padding:24px;font-size:13px}
 .empty{text-align:center;color:var(--muted);padding:40px;font-size:14px}
+#wordpanel{display:none;max-width:760px;margin:0 auto;padding:14px 16px 4px}
+#wordpanel.open{display:block}
+#wordq{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--fg);font-size:14px}
+#wordpanel label{display:inline-block;margin:8px 0;font-size:12px;color:var(--muted)}
+#wordout h3{font-size:15px;margin:14px 0 2px}
+#wordout p{font-size:13px;margin:4px 0}
+#wordout .muted{color:var(--muted);font-size:12px}
+#wordout table{border-collapse:collapse;font-size:13px;margin:8px 0}
+#wordout td{padding:2px 14px 2px 0;white-space:nowrap}
+#wordout td:nth-child(2),#wordout td:nth-child(3){color:var(--muted)}
+.wordex{border-left:3px solid var(--border);background:var(--quote);border-radius:4px;padding:5px 9px;margin:7px 0;font-size:13px}
+.wordex b{display:block;font-size:11px;color:var(--muted);font-weight:600;margin-bottom:2px}
+.wordex button{margin-top:5px;padding:2px 9px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg)}
+.wordall{margin:4px 0 8px;padding:5px 12px;font-size:12px;border:1px solid var(--me);border-radius:8px;background:var(--me);color:#fff}
+body[data-wordmode] .msg{cursor:pointer}
 </style></head><body>
 <div class="topbar">
 <h1>__TITLE__</h1>
@@ -418,12 +485,19 @@ main{max-width:760px;margin:0 auto;padding:0 16px 120px}
 </select>
 <input id="jump" type="date" title="Jump to date"/>
 <button id="oday" title="Show this day in every year">On this day</button>
+<button id="wordbtn" title="Look up a word">Words</button>
 <button id="surprise" title="Random memory">Surprise me</button>
 <button id="theme" title="Toggle theme" aria-label="Toggle theme">Light</button>
 <span class="count" id="count"></span>
 <a href="report.html" style="color:#5b8ff9;font-size:13px">Report</a>
 <a href="year_in_review.html" style="color:#5b8ff9;font-size:13px">Years</a>
 </div>
+<section id="wordpanel">
+<input id="wordq" placeholder="Look up a word or a phrase" autocomplete="off" list="wordsug"/>
+<datalist id="wordsug"></datalist>
+<label><input type="checkbox" id="wordfold"/> count spellings together</label>
+<div id="wordout"></div>
+</section>
 <main id="feed"></main>
 <div class="loader" id="loader">Loading...</div>
 <script>
@@ -434,8 +508,14 @@ var orderEl=document.getElementById('order'), jumpEl=document.getElementById('ju
 var countEl=document.getElementById('count');
 var reBtn=document.getElementById('re'), themeBtn=document.getElementById('theme');
 var odayBtn=document.getElementById('oday'), surpriseBtn=document.getElementById('surprise');
-var state={before:null,after:null,q:'',member:'',loading:false,done:false,searching:false,mode:'feed',regex:false};
+var wordBtn=document.getElementById('wordbtn'), wordPanel=document.getElementById('wordpanel');
+var wq=document.getElementById('wordq'), wout=document.getElementById('wordout');
+var wfold=document.getElementById('wordfold'), wsug=document.getElementById('wordsug'), wtimer=null;
+var state={before:null,after:null,q:'',member:'',loading:false,done:false,searching:false,mode:'feed',regex:false,wordq:'',wordfold:false,offset:0};
 var lastDay='';
+var curGroup=null;
+function clearFeed(){feed.innerHTML='';lastDay='';curGroup=null;
+document.body.removeAttribute('data-wordmode');}
 var THREAD=null;
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function fmt(ts){var d=new Date(ts);return d.toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});}
@@ -445,12 +525,16 @@ var today=dayKey(t.getTime());var yest=dayKey(t.getTime()-864e5);
 if(key===today)return 'Today';if(key===yest)return 'Yesterday';return d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'});}
 function yearsAgo(ts){var d=new Date(ts),t=new Date();if(d.getMonth()!==t.getMonth()||d.getDate()!==t.getDate())return null;var y=t.getFullYear()-d.getFullYear();return y>0?y:null;}
 function sentBg(s){if(s==null)return '';if(s>0.15)return ' sent-pos';if(s<-0.15)return ' sent-neg';return '';}
+/* Most exports ship without most of their media, and a broken <img> renders as
+   nothing at all: the message looks blank while its reactions sit underneath. */
+function mediaGone(el){var box=el.parentNode;box.className='media gone';
+box.textContent=(el.getAttribute('data-kind')||'file')+' missing from the export';}
 function mediaHTML(m){
 var out='';
-if(m.photo_uris&&m.photo_uris.length){m.photo_uris.slice(0,3).forEach(function(u){out+='<div class="media"><img loading="lazy" src="/t/'+SLUG+'/media/'+esc(u)+'" alt=""/></div>';});}
-if(m.has_gif&&m.gif_uris.length){m.gif_uris.slice(0,2).forEach(function(u){out+='<div class="media"><img loading="lazy" src="/t/'+SLUG+'/media/'+esc(u)+'" alt=""/></div>';});}
-if(m.has_video&&m.video_uris.length){m.video_uris.slice(0,2).forEach(function(u){out+='<div class="media"><video controls preload="metadata" src="/t/'+SLUG+'/media/'+esc(u)+'"></video></div>';});}
-if(m.has_audio&&m.audio_uris.length){m.audio_uris.slice(0,2).forEach(function(u){out+='<div class="media"><audio controls preload="metadata" src="/t/'+SLUG+'/media/'+esc(u)+'"></audio></div>';});}
+if(m.photo_uris&&m.photo_uris.length){m.photo_uris.slice(0,3).forEach(function(u){out+='<div class="media"><img loading="lazy" data-kind="photo" onerror="mediaGone(this)" src="/t/'+SLUG+'/media/'+esc(u)+'" alt=""/></div>';});}
+if(m.has_gif&&m.gif_uris.length){m.gif_uris.slice(0,2).forEach(function(u){out+='<div class="media"><img loading="lazy" data-kind="gif" onerror="mediaGone(this)" src="/t/'+SLUG+'/media/'+esc(u)+'" alt=""/></div>';});}
+if(m.has_video&&m.video_uris.length){m.video_uris.slice(0,2).forEach(function(u){out+='<div class="media"><video controls preload="metadata" data-kind="video" onerror="mediaGone(this)" src="/t/'+SLUG+'/media/'+esc(u)+'"></video></div>';});}
+if(m.has_audio&&m.audio_uris.length){m.audio_uris.slice(0,2).forEach(function(u){out+='<div class="media"><audio controls preload="metadata" data-kind="voice message" onerror="mediaGone(this)" src="/t/'+SLUG+'/media/'+esc(u)+'"></audio></div>';});}
 if(m.has_file&&m.file_uris.length){m.file_uris.slice(0,3).forEach(function(u){out+='<div class="media"><a href="/t/'+SLUG+'/media/'+esc(u)+'" target="_blank">'+esc(u.split('/').pop())+'</a></div>';});}
 if(m.has_file&&!m.file_uris.length){m.file_names.slice(0,3).forEach(function(n){out+='<div class="media">[file: '+esc(n)+']</div>';});}
 if(m.has_sticker)out+='<div class="media sticker">[sticker]</div>';
@@ -464,12 +548,20 @@ var ya=yearsAgo(m.ts);
 var quote=m.reply_to?'<div class="quote">'+esc(m.reply_to.sender)+': '+esc(m.reply_to.snippet)+'</div>':'';
 var reactions=m.reactions.map(function(r){return '<span class="ra">'+esc(r.reaction)+' '+esc(r.actor)+'</span>';}).join('');
 var badge=ya?'<span class="badge">'+ya+'y ago</span>':'';
-var body='<div class="text">'+esc(m.content)+'</div>';
 var mhtml=mediaHTML(m);
-return '<div class="msg'+sentBg(m.sentiment)+'"><div class="dot" style="background:'+esc(m.color)+'">'+esc(m.sender[0]).toUpperCase()+'</div>'+
+/* Roughly one message in a hundred arrives with no text, no media and no type.
+   Rendering it as an empty bubble looks like the reader dropped it. */
+var body=m.content?'<div class="text">'+esc(m.content)+'</div>':
+(mhtml?'':'<div class="nocontent">(this message came through empty)</div>');
+return '<div class="msg'+sentBg(m.sentiment)+'" data-ts="'+m.ts+'"><div class="dot" style="background:'+esc(m.color)+'">'+esc(m.sender[0]).toUpperCase()+'</div>'+
 '<div class="body"><div class="sender">'+esc(m.sender)+'<span class="time">'+fmt(m.ts)+'</span>'+badge+'</div>'+
 quote+body+mhtml+(reactions?'<div class="reactions">'+reactions+'</div>':'')+'</div></div>';}
-function appendMsgs(msgs){msgs.forEach(function(m){var k=dayKey(m.ts);if(k!==lastDay){if(lastDay!=='')feed.appendChild(document.createElement('div'));var d=document.createElement('div');d.className='day';d.textContent=dayLabel(m.ts);feed.appendChild(d);lastDay=k;}feed.insertAdjacentHTML('beforeend',msgHTML(m));});}
+function dayGroup(label){var sec=document.createElement('section');sec.className='daygroup';
+var d=document.createElement('div');d.className='day';d.textContent=label;
+sec.appendChild(d);feed.appendChild(sec);return sec;}
+function appendMsgs(msgs){msgs.forEach(function(m){var k=dayKey(m.ts);
+if(k!==lastDay||!curGroup){curGroup=dayGroup(dayLabel(m.ts));lastDay=k;}
+curGroup.insertAdjacentHTML('beforeend',msgHTML(m));});}
 function apiURL(){var u='/t/'+SLUG+'/api/messages?limit=400';
 if(state.q){u+='&q='+encodeURIComponent(state.q);}
 if(state.regex)u+='&re=1';
@@ -477,36 +569,126 @@ if(state.member)u+='&member='+encodeURIComponent(state.member);
 if(state.before!=null)u+='&before='+state.before;
 if(state.after!=null)u+='&after='+state.after;
 return u;}
-function loadMore(){if(state.loading||state.done)return;state.loading=true;loader.textContent='Loading...';
+function loadMore(){if(state.loading||state.done)return;
+if(state.mode==='word')return loadWordPage();
+state.loading=true;loader.textContent='Loading...';
 fetch(apiURL()).then(function(r){return r.json();}).then(function(data){
 state.loading=false;
-if(state.searching){feed.innerHTML='';lastDay='';
+if(state.searching){clearFeed();
 countEl.textContent=data.truncated?('showing '+data.shown+' of '+data.total_matches+' match(es)'):(data.total_matches+' match(es)');
 appendMsgs(data.messages);if(data.total_matches<1){feed.innerHTML='<div class="empty">No matches.</div>';}state.done=true;loader.style.display='none';return;}
 appendMsgs(data.messages);
 if(data.next_before!=null){state.before=data.next_before;}else if(data.next_after!=null){state.after=data.next_after;}else{state.done=true;}
 countEl.textContent=feed.querySelectorAll('.msg').length+' / '+THREAD.total.toLocaleString()+' messages';
 if(state.done){loader.textContent='End of history.';}}).catch(function(){state.loading=false;loader.textContent='Error loading.';});}
-function reset(mode){state.loading=false;state.done=false;state.before=null;state.after=null;state.mode='feed';feed.innerHTML='';lastDay='';loader.style.display='';if(mode==='search'){state.searching=true;}else{state.searching=false;
+function reset(mode){state.loading=false;state.done=false;state.before=null;state.after=null;state.mode='feed';clearFeed();loader.style.display='';if(mode==='search'){state.searching=true;}else{state.searching=false;
 /* Oldest-first walks forward from the start of history; leaving both cursors
    null always paginates backwards from the newest message. */
 if(orderEl.value==='oldest')state.after=0;}
 loadMore();}
-function onThisDay(dateStr){state.mode='day';state.done=false;state.loading=false;feed.innerHTML='';lastDay='';loader.style.display='';
+function onThisDay(dateStr){state.mode='day';state.done=false;state.loading=false;clearFeed();loader.style.display='';
 fetch('/t/'+SLUG+'/api/day?date='+encodeURIComponent(dateStr)).then(function(r){return r.json();}).then(function(data){
 loader.style.display='none';state.done=true;
 var byYear={};data.messages.forEach(function(m){var y=new Date(m.ts).getFullYear();(byYear[y]=byYear[y]||[]).push(m);});
 var years=Object.keys(byYear).sort();
 countEl.textContent=data.total+' message(s) on '+dateStr.slice(5)+' across '+(years.length||0)+' year(s)';
 if(years.length===0){feed.innerHTML='<div class="empty">Nothing happened on this day.</div>';return;}
-years.forEach(function(y){var d=document.createElement('div');d.className='day';d.textContent=y+' ('+byYear[y].length+' message'+(byYear[y].length===1?'':'s')+')';feed.appendChild(d);byYear[y].forEach(function(m){feed.insertAdjacentHTML('beforeend',msgHTML(m));});});
+years.forEach(function(y){var sec=dayGroup(y+' ('+byYear[y].length+' message'+(byYear[y].length===1?'':'s')+')');
+byYear[y].forEach(function(m){sec.insertAdjacentHTML('beforeend',msgHTML(m));});});
 }).catch(function(){loader.style.display='none';state.done=true;feed.innerHTML='<div class="empty">Error loading.</div>';});}
-function randomMemory(){state.mode='random';state.done=true;state.loading=false;feed.innerHTML='';lastDay='';loader.style.display='none';
+function randomMemory(){state.mode='random';state.done=true;state.loading=false;clearFeed();loader.style.display='none';
 fetch('/t/'+SLUG+'/api/random').then(function(r){return r.json();}).then(function(d){
 countEl.textContent='Random memory (click again for another)';
 feed.insertAdjacentHTML('beforeend',msgHTML(d.message));
 feed.insertAdjacentHTML('beforeend','<div style="text-align:center;margin-top:16px"><button onclick="randomMemory()">Another</button></div>');
 }).catch(function(){feed.innerHTML='<div class="empty">Error loading.</div>';});}
+/* Word mode: the feed becomes every message holding the word, oldest first,
+   and clicking one leaves the list to read the conversation around it. */
+function showWordMentions(word,folded){state.mode='word';state.wordq=word;
+state.wordfold=folded;state.offset=0;state.done=false;state.loading=false;
+state.searching=false;clearFeed();document.body.setAttribute('data-wordmode','1');
+loader.style.display='';countEl.textContent='Loading mentions of "'+word+'"...';
+window.scrollTo(0,0);loadWordPage();}
+function loadWordPage(){state.loading=true;loader.textContent='Loading...';
+fetch('/t/'+SLUG+'/api/word/hits?q='+encodeURIComponent(state.wordq)+
+'&variants='+(state.wordfold?'1':'0')+'&offset='+state.offset)
+.then(function(r){return r.status===200?r.json():null;}).then(function(d){
+state.loading=false;
+if(!d){state.done=true;loader.style.display='none';
+feed.innerHTML='<div class="empty">Never said in this chat.</div>';return;}
+appendMsgs(d.messages);
+countEl.textContent=Math.min(d.offset+d.messages.length,d.total).toLocaleString()+
+' / '+d.total.toLocaleString()+' mentions of "'+d.word+'" — click one to open it in the chat';
+if(d.next_offset!=null){state.offset=d.next_offset;}
+else{state.done=true;loader.textContent='End of mentions.';}
+}).catch(function(){state.loading=false;loader.textContent='Error loading.';});}
+/* One handler on the feed rather than one per message: in word mode a click
+   anywhere on a message is a request for its context. */
+feed.addEventListener('click',function(ev){if(state.mode!=='word')return;
+var el=ev.target.closest?ev.target.closest('.msg'):null;
+if(el&&el.dataset.ts)jumpToTs(parseInt(el.dataset.ts,10));});
+/* Everything below builds nodes and sets textContent. The profile carries raw
+   export text, and unlike the feed it does not go through msgHTML, so nothing
+   here may use innerHTML. */
+function jumpToTs(ts){state.mode='feed';state.done=false;state.loading=false;state.searching=false;
+state.q='';qEl.value='';
+if(orderEl.value==='newest'){state.before=ts+1;state.after=null;}else{state.after=ts-1;state.before=null;}
+clearFeed();loader.style.display='';loadMore();
+feed.scrollIntoView();}
+function wordLine(text){var p=document.createElement('p');p.textContent=text;wout.appendChild(p);}
+function wordRow(label,e){if(!e)return null;var d=document.createElement('div');d.className='wordex';
+var b=document.createElement('b');b.textContent=label+' · '+e.sender+' · '+e.dt;
+var body=document.createElement('div');body.textContent=e.content||'(no text)';
+var j=document.createElement('button');j.textContent='open in the feed';
+j.addEventListener('click',function(){jumpToTs(e.ts);});
+d.appendChild(b);d.appendChild(body);d.appendChild(j);return d;}
+function renderWord(p){wout.textContent='';
+var h=document.createElement('h3');
+h.textContent=p.word+' — '+p.uses.toLocaleString()+' use'+(p.uses===1?'':'s')+' in '+
+p.messages.toLocaleString()+' message'+(p.messages===1?'':'s')+(p.folded?' (spellings counted together)':'');
+wout.appendChild(h);
+var all=document.createElement('button');all.className='wordall';
+all.textContent='Show all '+p.messages.toLocaleString()+' in the feed, oldest first';
+all.addEventListener('click',function(){showWordMentions(p.word,p.folded);});
+wout.appendChild(all);
+var meta=document.createElement('p');meta.className='muted';
+meta.textContent='First '+p.first.dt+' ('+p.first.sender+') · last '+p.last.dt+
+' · peak '+p.peak_year+(p.reaction_pull?' · pulls '+p.reaction_pull+'x the usual reactions':'')+
+' · said on its own '+p.alone_pct+'% of the time';wout.appendChild(meta);
+var t=document.createElement('table');p.per_member.forEach(function(r){var tr=t.insertRow();
+[r.member,r.uses.toLocaleString()+' ×',r.per_1k+' per 1k messages'].forEach(function(v){
+tr.insertCell().textContent=v;});});wout.appendChild(t);
+if(p.variants.length)wordLine('Also spelled: '+p.variants.map(function(x){
+return x.word+' ('+x.uses+')';}).join(', '));
+if(p.collocations.length)wordLine('Keeps company with: '+p.collocations.map(function(x){
+return x.word+' ×'+x.ratio;}).join(', '));
+var caught=p.adoption.filter(function(x){return x.first;});
+if(caught.length>1)wordLine('Caught on: '+caught.map(function(x){
+return x.member+' (+'+x.days_after+'d)';}).join(' → '));
+var never=p.adoption.filter(function(x){return !x.first;});
+if(never.length)wordLine('Never said it: '+never.map(function(x){return x.member;}).join(', '));
+[['First ever',p.examples.first],['Most reacted',p.examples.most_reacted]].concat(
+p.examples.random.map(function(e){return ['Somewhere in the middle',e];})).forEach(function(pair){
+var row=wordRow(pair[0],pair[1]);if(row)wout.appendChild(row);});}
+function wordLookup(){var q=wq.value.trim();if(!q){wout.textContent='';return;}
+fetch('/t/'+SLUG+'/api/word?q='+encodeURIComponent(q)+'&variants='+(wfold.checked?'1':'0'))
+.then(function(r){
+if(r.status===404){wout.textContent='Never said in this chat.';return null;}
+if(r.status===503){wout.textContent='Word index disabled (--no-index).';return null;}
+return r.json();}).then(function(p){if(p)renderWord(p);})
+.catch(function(){wout.textContent='Error looking that up.';});}
+/* Spellings are a property of one word, so the toggle has nothing to fold on a
+   phrase. */
+wq.addEventListener('input',function(){wfold.disabled=wq.value.trim().indexOf(' ')>=0;
+clearTimeout(wtimer);wtimer=setTimeout(function(){
+fetch('/t/'+SLUG+'/api/suggest?q='+encodeURIComponent(wq.value))
+.then(function(r){return r.json();}).then(function(d){wsug.textContent='';
+d.words.forEach(function(w){var o=document.createElement('option');o.value=w;wsug.appendChild(o);});
+}).catch(function(){});},150);});
+wq.addEventListener('change',wordLookup);
+wfold.addEventListener('change',wordLookup);
+wordBtn.addEventListener('click',function(){var open=wordPanel.classList.toggle('open');
+wordBtn.classList.toggle('active',open);if(open)wq.focus();});
 var io=new IntersectionObserver(function(entries){if(entries[0].isIntersecting)loadMore();},{rootMargin:'600px'});
 io.observe(loader);
 qEl.addEventListener('input',function(){var v=qEl.value.trim();if(state.q===v)return;state.q=v;reset(v?'search':'');});
@@ -514,7 +696,7 @@ memberEl.addEventListener('change',function(){state.member=memberEl.value;reset(
 orderEl.addEventListener('change',function(){reset(state.q?'search':'');});
 jumpEl.addEventListener('change',function(){if(!jumpEl.value)return;var d=new Date(jumpEl.value+'T00:00:00');
 if(orderEl.value==='newest'){state.before=d.getTime()+864e5;state.after=null;}else{state.after=d.getTime()-864e5;state.before=null;}
-state.mode='feed';state.done=false;feed.innerHTML='';lastDay='';loadMore();});
+state.mode='feed';state.done=false;clearFeed();loadMore();});
 reBtn.addEventListener('click',function(){state.regex=!state.regex;reBtn.classList.toggle('active',state.regex);
 if(state.q)reset('search');});
 odayBtn.addEventListener('click',function(){onThisDay(jumpEl.value||new Date().toISOString().slice(0,10));});
@@ -530,9 +712,13 @@ loadMore();});
 </script></body></html>"""
 
 
-def run_server(threads, port, output_dir):
-    indexed = {t["slug"]: ThreadIndex(t["slug"], t["title"], t["thread_dir"], t["msgs"])
-               for t in threads}
+def run_server(threads, port, output_dir, build_index=True):
+    indexed = {}
+    for t in threads:
+        if build_index:
+            print(f"  Indexing {t['title']} for word search...", flush=True)
+        indexed[t["slug"]] = ThreadIndex(t["slug"], t["title"], t["thread_dir"],
+                                         t["msgs"], build_index=build_index)
     handler = make_handler(indexed, Path(output_dir))
     server = ThreadingHTTPServer(("127.0.0.1", port), handler)
     for t in indexed.values():

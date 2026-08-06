@@ -37,10 +37,18 @@ DEFAULT_OUTPUT = "output"
 # Analyses that can be turned off with --skip. "jokes" dominates peak memory
 # (it counts every 2-4 word phrase in the chat) and "sentiment" is the slowest,
 # so those two are what to drop on a very large chat or a small machine.
-SKIPPABLE = ("jokes", "sentiment", "wordcloud", "topics")
+SKIPPABLE = ("jokes", "sentiment", "wordcloud", "topics", "narratives")
 REPLY_WINDOW_SECONDS = 60 * 60
 CONVERSATION_WINDOW_SECONDS = 30 * 60
 MESSAGE_FILE_RE = re.compile(r"^message_\d+\.json$")
+
+# Vocabulary is counted per message, not per keystroke: one pasted wall of
+# "optix optix optix..." otherwise decides what a whole year was about. Three
+# still lets "lol lol lol" read as emphasis; beyond that it is a copy-paste.
+MAX_TOKEN_REPEATS = 3
+# Repeating one word or emoji this many times in a single message is flooding
+# rather than talking, and gets counted so the habit stays visible.
+FLOOD_REPEATS = 10
 
 KNOWN_MESSAGE_KEYS = {
     "id", "sender_name", "timestamp_ms", "timestamp", "content", "type", "reactions",
@@ -98,6 +106,38 @@ BOILERPLATE_RE = re.compile(
     # would otherwise be counted as something a member typed.
     r"|^.{1,80}? reacted .{0,20}? to your message\.?\s*$",
     re.IGNORECASE)
+
+# Messenger narrates group admin events into `content` too, attributed to
+# whoever did them. Left in, the chat's own plumbing reads as vocabulary: group
+# names become a member's signature word, and "named group" / "set nickname"
+# rank as running jokes said by all ten members over nine years. Every pattern
+# is anchored to the whole message, so an ordinary sentence that happens to say
+# "they added black flash in the final fight" is untouched.
+SYSTEM_EVENT_RE = re.compile(
+    r"^(?:"
+    r".{1,80}? named the group .*"
+    r"|.{1,80}? (?:set|cleared) the nickname for .*"
+    r"|.{1,80}? set your nickname to .*"
+    r"|.{1,80}? set the quick reaction to .*"
+    r"|.{1,80}? changed the (?:group photo|group name|theme)(?: to .*)?\.?"
+    r"|.{1,80}? (?:added|removed) .{1,80}? (?:to|from) the group\.?"
+    r"|.{1,80}? (?:left|joined) the group\.?"
+    r"|.{1,80}? created a poll: .*"
+    r"|.{1,80}? voted for .* in the poll\.?"
+    r"|this poll is no longer available\.?"
+    r"|.{1,80}? (?:un)?pinned a message\.?"
+    r"|.{1,80}? (?:started|missed|ended) (?:a|the|your) (?:video )?(?:call|chat)\.?"
+    r"|.{1,80}? joined the (?:video )?(?:call|chat)\.?"
+    r"|(?:the )?(?:video )?call ended\.?"
+    r"|.{1,80}? (?:is|are) now connected on Messenger\.?"
+    r")\s*$",
+    re.IGNORECASE)
+
+# Automated members. They post like people but skew every human superlative:
+# a bot answers in a second and never has a bad day, so it wins "fastest
+# replier" and "best vibes" outright. Kept in the data, kept out of the
+# personality awards, and labelled wherever it does appear.
+BOT_NAMES = {"meta ai"}
 
 PALETTE = ["#5b8ff9", "#5ad8a6", "#f6bd16", "#e8684a", "#6dc8ec", "#9270ca",
            "#ff9d4d", "#269a99", "#ff99c3", "#9fe6b8"]
@@ -351,7 +391,23 @@ def tokenize(text):
 
 
 def split_emojis(text):
-    return [c for c in (text or "") if emoji_lib.is_emoji(c)]
+    """Emoji as whole graphemes, not code points.
+
+    Scanning character by character splits "✋🏻" into a hand plus a bare skin
+    tone and "🤦‍♂️" into a face plus a male sign, so the modifiers pile up and
+    rank as emoji of their own ("light_skin_tone" placed sixth on a real chat).
+    """
+    return [e["emoji"] for e in emoji_lib.emoji_list(text or "")]
+
+
+def is_bot(name):
+    """True for members that are software, judged only on an unmistakable name."""
+    n = (name or "").strip().lower()
+    return n in BOT_NAMES or n.endswith(" bot")
+
+
+def member_label(name):
+    return f"{name} (bot)" if is_bot(name) else name
 
 
 def add_derived_fields(msgs):
@@ -364,16 +420,46 @@ def add_derived_fields(msgs):
     Tokens are interned, so a long chat holds pointers into its own vocabulary
     instead of millions of duplicate strings, and messages without text share
     the empty tuple. Must run after any anonymization, which rewrites content.
+
+    Each message also gets a `vocab` view with repeats capped, which is what the
+    word, emoji, topic and joke counts read. `_cap_repeats` hands back the very
+    same tuple when nothing was capped, so the ordinary message -- almost all of
+    them -- stores one pointer rather than a second copy of its tokens.
     """
     for m in msgs:
         content = _words_only(m["content"])
         if content:
-            m["tokens"] = tuple(sys.intern(w) for w in tokenize(content))
-            m["emojis"] = tuple(sys.intern(e) for e in split_emojis(content))
+            tokens = tuple(sys.intern(w) for w in tokenize(content))
+            emojis = tuple(sys.intern(e) for e in split_emojis(content))
+            m["tokens"] = tokens
+            m["emojis"] = emojis
+            m["vocab"], word_repeats = _cap_repeats(tokens)
+            m["vocab_emojis"], emoji_repeats = _cap_repeats(emojis)
+            m["is_flood"] = max(word_repeats, emoji_repeats) >= FLOOD_REPEATS
         else:
-            m["tokens"] = ()
-            m["emojis"] = ()
+            m["tokens"] = m["vocab"] = ()
+            m["emojis"] = m["vocab_emojis"] = ()
+            m["is_flood"] = False
     return msgs
+
+
+def _cap_repeats(items, cap=MAX_TOKEN_REPEATS):
+    """(items with each entry kept at most `cap` times, highest repeat count).
+
+    Returns the input object itself when nothing had to be dropped, so callers
+    that keep both views pay nothing for the common case.
+    """
+    counts = Counter()
+    kept = []
+    capped = False
+    for item in items:
+        counts[item] += 1
+        if counts[item] <= cap:
+            kept.append(item)
+        else:
+            capped = True
+    most = counts.most_common(1)[0][1] if counts else 0
+    return (tuple(kept) if capped else items), most
 
 
 def _words_only(content):
@@ -382,8 +468,10 @@ def _words_only(content):
     A pasted link tokenizes into "https", "www", "youtube", "com", "watch",
     which then outranks real vocabulary in word clouds, topics and especially
     running jokes. Domains are already reported separately from share links.
+    Messenger's own boilerplate and group events go the same way: the message
+    still counts, only its text is plumbing rather than something anyone typed.
     """
-    if not content or BOILERPLATE_RE.match(content):
+    if not content or BOILERPLATE_RE.match(content) or SYSTEM_EVENT_RE.match(content):
         return ""
     return URL_RE.sub(" ", content)
 
@@ -397,6 +485,54 @@ def _tokens(m):
 def _emojis(m):
     cached = m.get("emojis")
     return cached if cached is not None else tuple(split_emojis(_words_only(m["content"])))
+
+
+def _vocab(m):
+    """Tokens with repeats capped -- what every word-frequency stat counts."""
+    cached = m.get("vocab")
+    return cached if cached is not None else _cap_repeats(_tokens(m))[0]
+
+
+def _vocab_emojis(m):
+    cached = m.get("vocab_emojis")
+    return cached if cached is not None else _cap_repeats(_emojis(m))[0]
+
+
+def _pct(part, total):
+    """Whole percent, rounded the same way everywhere it is printed."""
+    return round(100 * part / total) if total else 0
+
+
+def _fmt_duration(seconds):
+    """A reply gap in the unit that actually shows the difference.
+
+    Rounding every median to minutes collapsed a leaderboard of 1 s to 10 s
+    into nine members all tied at "0.1 min".
+    """
+    if seconds is None:
+        return "-"
+    if seconds < 1:
+        return f"{seconds:.1f} s"
+    if seconds < 60:
+        return f"{seconds:.0f} s"
+    if seconds < 3600:
+        return f"{seconds / 60:.1f} min"
+    return f"{seconds / 3600:.1f} h"
+
+
+def _member_name_words(msgs, extra_names=()):
+    """Every word that appears in a member's name, lowercased.
+
+    Senders are not the whole cast. Someone can be in the chat and never send
+    a message in the export -- a deleted account arrives as "Facebook user" and
+    takes its real name with it -- while everyone goes on addressing them by
+    name. Left out, they read as a topic. `extra_names` carries the export's
+    participant list and anything given with --names.
+    """
+    words = set()
+    for name in {m["sender"] for m in msgs} | set(extra_names):
+        words.update(tokenize(name))
+    return words
 
 
 def _median(sorted_values):
@@ -442,21 +578,24 @@ def core_stats(msgs):
     by_month = Counter()
     by_year = Counter()
     by_day = Counter()
+    floods = Counter()
     total_words = 0
     for m in msgs:
         member_msgs[m["sender"]] += 1
+        if m.get("is_flood"):
+            floods[m["sender"]] += 1
         by_hour[m["dt"].hour] += 1
         by_weekday[m["dt"].weekday()] += 1
         by_month[m["dt"].month] += 1
         by_year[m["dt"].year] += 1
         by_day[m["dt"].date()] += 1
-        toks = _tokens(m)
-        total_words += len(toks)
-        for w in toks:
+        # Volume counts every keystroke; vocabulary counts what was said.
+        total_words += len(_tokens(m))
+        for w in _vocab(m):
             if w not in STOPWORDS and len(w) > 1:
                 words[w] += 1
                 per_member_words[m["sender"]][w] += 1
-        for e in _emojis(m):
+        for e in _vocab_emojis(m):
             emojis[e] += 1
             per_member_emojis[m["sender"]][e] += 1
     media = sum(1 for m in msgs if m["has_media"])
@@ -478,6 +617,7 @@ def core_stats(msgs):
         "by_year": by_year,
         "by_day": by_day,
         "longest_streak": longest_streak(list(by_day)),
+        "floods": floods,
         "media": media,
         "links": links,
         "calls": calls,
@@ -504,8 +644,8 @@ def yearly_recaps(msgs):
         day_counts = Counter()
         best_reacted = None
         for m in group:
-            words.update(w for w in _tokens(m) if w not in STOPWORDS and len(w) > 1)
-            emojis.update(_emojis(m))
+            words.update(w for w in _vocab(m) if w not in STOPWORDS and len(w) > 1)
+            emojis.update(_vocab_emojis(m))
             day_counts[m["dt"].date()] += 1
             if m["reactions"] and (best_reacted is None or
                                    len(m["reactions"]) > len(best_reacted["reactions"])):
@@ -532,11 +672,11 @@ def personalities(msgs, top=10):
     per_member = defaultdict(list)
     for m in msgs:
         per_member[m["sender"]].append(m)
-        for w in _tokens(m):
+        for w in _vocab(m):
             if w not in STOPWORDS and len(w) > 1:
                 per_member_words[m["sender"]][w] += 1
                 word_totals[w] += 1
-        for e in _emojis(m):
+        for e in _vocab_emojis(m):
             per_member_emojis[m["sender"]][e] += 1
     for member, group in per_member.items():
         total_msgs = len(group)
@@ -640,9 +780,12 @@ def response_speed(msgs, top=10):
 
 
 def _fastest_replier(speed):
-    """First row of the response-speed table that actually has a median."""
+    """Quickest human in the response-speed table.
+
+    Bots reply in under a second and would take this headline permanently.
+    """
     for row in (speed or {}).get("table") or []:
-        if row["median_s"] is not None:
+        if row["median_s"] is not None and not is_bot(row["member"]):
             return row
     return None
 
@@ -655,7 +798,7 @@ def swear_stats(msgs):
     total_hits = 0
     for m in msgs:
         found = False
-        for w in _tokens(m):
+        for w in _vocab(m):
             if w in CENSOR_WORDS:
                 member_words[m["sender"]][w] += 1
                 word_totals[w] += 1
@@ -700,7 +843,8 @@ def weird_statements(msgs, top=10):
     scored = []
     for m in msgs:
         text = m["content"] or ""
-        if not text or m["mtype"] in ("Call", "Share"):
+        # A chatbot having a long shouty night filled seven of ten slots here.
+        if not text or m["mtype"] in ("Call", "Share") or is_bot(m["sender"]):
             continue
         score, reasons = 0, []
         letters = [c for c in text if c.isalpha()]
@@ -802,7 +946,7 @@ def word_trends(msgs, top=5):
     per_year_word = defaultdict(Counter)
     for m in msgs:
         y = m["dt"].year
-        for w in _tokens(m):
+        for w in _vocab(m):
             if w not in STOPWORDS and len(w) > 1:
                 totals[w] += 1
                 per_year_word[y][w] += 1
@@ -984,11 +1128,20 @@ def word_cloud_data(msgs):
     overall = Counter()
     per_member = defaultdict(Counter)
     for m in msgs:
-        for w in _tokens(m):
+        for w in _vocab(m):
             if w not in STOPWORDS and len(w) > 1:
                 overall[w] += 1
                 per_member[m["sender"]][w] += 1
     return {"overall": overall, "per_member": per_member}
+
+
+def _wordcloud_members(per_member, member_msgs, limit=6):
+    """The busiest members, not the first six alphabetically.
+
+    Sorting by name handed word clouds to a member with three messages while
+    the second, third and fourth loudest people in the chat got none.
+    """
+    return sorted(per_member, key=lambda m: (-member_msgs.get(m, 0), m))[:limit]
 
 
 def monologues(msgs):
@@ -1030,7 +1183,7 @@ def emoji_stats(msgs):
     per_year = defaultdict(Counter)
     member_total = Counter(m["sender"] for m in msgs)
     for m in msgs:
-        emojis = _emojis(m)
+        emojis = _vocab_emojis(m)
         if not emojis:
             continue
         per_member[m["sender"]].update(emojis)
@@ -1071,6 +1224,10 @@ def question_stats(msgs):
     answer_time = defaultdict(list)
     total_asked = 0
     total_answered = 0
+    # One message can clear a whole queue of questions. Each of them counts as
+    # answered, but the reply is a single act: crediting the responder once per
+    # question inflated "responses given" past the number of messages they sent.
+    credited = set()
     for idx, m in enumerate(msgs):
         if not is_question(m):
             continue
@@ -1081,8 +1238,12 @@ def question_stats(msgs):
             total_answered += 1
             answered_q[m["sender"]] += 1
             responder = msgs[j]["sender"]
-            responses[responder] += 1
-            answer_time[responder].append((msgs[j]["ts_ms"] - m["ts_ms"]) / 1000)
+            if j not in credited:
+                credited.add(j)
+                responses[responder] += 1
+                # Timed from the earliest question in the queue: the one that
+                # actually waited that long.
+                answer_time[responder].append((msgs[j]["ts_ms"] - m["ts_ms"]) / 1000)
 
     table = []
     for member in sorted(set(asked) | set(responses)):
@@ -1095,6 +1256,7 @@ def question_stats(msgs):
             "answered": answered_q[member],
             "answer_pct": round(100 * answered_q[member] / a, 1) if a else None,
             "responses_given": responses[member],
+            "median_s": med,
             "median_m": round(med / 60, 1) if med is not None else None,
         })
     # Name breaks ties so equal rows keep the same order from run to run.
@@ -1104,21 +1266,26 @@ def question_stats(msgs):
             "unanswered_count": total_asked - total_answered}
 
 
-def topic_words(msgs, top=6):
+def topic_words(msgs, top=6, names=()):
     """Words that characterise each year, scored with tf-idf over years.
 
     Each *year* is one document, so the document frequency of a word is the
     number of years it shows up in. Counting messages instead makes the idf
     term go negative for anything common, which inverts the ranking and
     surfaces one-off typos as a year's topics.
+
+    Member names are dropped, the same way the running jokes drop them: people
+    address each other constantly, so left in they take most of the slots and
+    every year reads as a list of who was in the chat.
     """
+    name_words = _member_name_words(msgs, names)
     by_year = defaultdict(Counter)
     year_totals = Counter()
     years_with_word = defaultdict(set)
     for m in msgs:
         year = m["dt"].year
-        for w in _tokens(m):
-            if w in STOPWORDS or len(w) <= 2:
+        for w in _vocab(m):
+            if w in STOPWORDS or w in name_words or len(w) <= 2:
                 continue
             by_year[year][w] += 1
             year_totals[year] += 1
@@ -1139,7 +1306,7 @@ def topic_words(msgs, top=6):
     return {"by_year": result, "years": sorted(by_year)}
 
 
-def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12):
+def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12, names=()):
     """Repeated phrases said by enough people over enough years to be a joke.
 
     Done in two passes to keep memory bounded on long chats. Tracking every
@@ -1155,12 +1322,10 @@ def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12):
     """
     # Members address each other constantly, so without this every "joke" is
     # somebody's name. Urls are already stripped from the token stream.
-    name_words = set()
-    for sender in {m["sender"] for m in msgs}:
-        name_words.update(tokenize(sender))
+    name_words = _member_name_words(msgs, names)
 
     def phrase_words(m):
-        return [w for w in _tokens(m)
+        return [w for w in _vocab(m)
                 if w not in STOPWORDS and w not in name_words and len(w) > 2]
 
     def ngrams(words, n):
@@ -1176,7 +1341,10 @@ def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12):
     if not frequent:
         return {"jokes": [], "total_candidates": 0}
 
-    phrase = defaultdict(lambda: {"count": 0, "members": set(), "years": set(), "example": None})
+    phrase = defaultdict(lambda: {"count": 0, "members": set(), "years": set(),
+                                  "by_year": Counter(),
+                                  "members_by_year": defaultdict(set),
+                                  "example": None})
     for m in msgs:
         words = phrase_words(m)
         if len(words) < 2:
@@ -1195,6 +1363,10 @@ def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12):
                 info["count"] += 1
                 info["members"].add(m["sender"])
                 info["years"].add(m["dt"].year)
+                # Kept per year as well, so a year-in-review page can show what
+                # the joke did that year instead of its lifetime total.
+                info["by_year"][m["dt"].year] += 1
+                info["members_by_year"][m["dt"].year].add(m["sender"])
                 if info["example"] is None:
                     info["example"] = m["content"]
     jokes = []
@@ -1207,6 +1379,9 @@ def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12):
             jokes.append({
                 "phrase": phrase_text, "count": info["count"],
                 "members": sorted(info["members"]), "years": sorted(info["years"]),
+                "by_year": dict(info["by_year"]),
+                "members_by_year": {y: sorted(v)
+                                    for y, v in info["members_by_year"].items()},
                 "example": ex,
             })
     # Collapse phrases that are just a fragment of a longer one. "www youtube",
@@ -1241,12 +1416,20 @@ def _bar(fig, ax, labels, values, title, colors=None):
 
 
 def write_charts(msgs, stats, analyses, out_dir, track, top=10):
+    """Draw every chart and return the file names written, in display order.
+
+    The writers used to glob the output folder instead, which quietly picked up
+    charts left behind by an earlier run: a word cloud for a member this run no
+    longer covers still appeared in the report as if it belonged to it.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     theme = {"figure.facecolor": "white", "axes.facecolor": "white", "axes.edgecolor": "#dddddd"}
+    written = []
 
     def save(fig, name):
         fig.savefig(out_dir / name, dpi=150, bbox_inches="tight")
         plt.close(fig)
+        written.append(name)
 
     # messages by year
     years = sorted(stats["by_year"])
@@ -1290,7 +1473,7 @@ def write_charts(msgs, stats, analyses, out_dir, track, top=10):
         save(fig, "top_members.png")
 
     # top words
-    top_words = stats["words"].most_common(15)
+    top_words = stats["words"].most_common(top)
     if top_words:
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(8, 5))
@@ -1298,7 +1481,7 @@ def write_charts(msgs, stats, analyses, out_dir, track, top=10):
             save(fig, "top_words.png")
 
     # top emojis
-    top_emojis = stats["emojis"].most_common(12)
+    top_emojis = stats["emojis"].most_common(top)
     if top_emojis:
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(8, 5))
@@ -1632,6 +1815,10 @@ def write_charts(msgs, stats, analyses, out_dir, track, top=10):
             wc_data = None
         else:
             def save_wc(counter, name, label):
+                # WordCloud raises on an empty frequency dict, which took the
+                # whole run down for a chat that is all stopwords and stickers.
+                if not counter:
+                    return
                 wc = WordCloud(width=900, height=420, background_color="white",
                                colormap="viridis", max_words=120, random_state=42)
                 wc.generate_from_frequencies(dict(counter))
@@ -1642,9 +1829,10 @@ def write_charts(msgs, stats, analyses, out_dir, track, top=10):
                     ax.set_title(label, fontweight="bold")
                     save(fig, name)
             save_wc(wc_data["overall"], "wordcloud.png", "Overall word cloud")
-            for member, counter in sorted(wc_data["per_member"].items())[:6]:
-                save_wc(counter, f"wordcloud_{_slug(member)}.png",
-                        f"{member} word cloud")
+            for member in _wordcloud_members(wc_data["per_member"], stats["member_msgs"]):
+                save_wc(wc_data["per_member"][member],
+                        f"wordcloud_{_slug(member)}.png",
+                        f"{member_label(member)} word cloud")
 
     # monologues
     mono = analyses.get("monologues")
@@ -1693,14 +1881,15 @@ def write_charts(msgs, stats, analyses, out_dir, track, top=10):
             _bar(fig, ax, [r["member"] for r in top_q], [r["asked"] for r in top_q],
                  "Questions asked per member")
             save(fig, "questions_asked.png")
-        responders = [r for r in qst["table"] if r["median_m"] is not None]
+        responders = [r for r in qst["table"] if r["median_s"] is not None]
         if responders:
-            responders = sorted(responders, key=lambda r: r["median_m"])[:top]
+            responders = sorted(responders, key=lambda r: r["median_s"])[:top]
             with plt.rc_context(theme):
                 fig, ax = plt.subplots(figsize=(8, 4))
-                _bar(fig, ax, [r["member"] for r in responders],
-                     [max(0.1, r["median_m"]) for r in responders],
-                     "Median time to answer a question (minutes)")
+                _bar(fig, ax, [member_label(r["member"]) for r in responders],
+                     [max(1, r["median_s"]) for r in responders],
+                     "Median time to answer a question (seconds, log)")
+                ax.set_xscale("log")
                 save(fig, "question_speed.png")
 
     # topics per year (tf-idf)
@@ -1739,6 +1928,8 @@ def write_charts(msgs, stats, analyses, out_dir, track, top=10):
             _bar(fig, ax, [j["phrase"] for j in top_jokes],
                  [j["count"] for j in top_jokes], "Running jokes")
             save(fig, "inside_jokes.png")
+
+    return sorted(written)
 
 
 def _shorten(text, n=40):
@@ -1791,6 +1982,9 @@ def all_time_totals(stats, analyses):
                   if stats.get("types_available", True)
                   else "unavailable (export has no message types)"),
         ("Conversations", f"{conv.get('conversation_count', 0):,}"),
+        # Vocabulary counts cap repeats, so say how often that mattered rather
+        # than quietly deleting somebody's favourite habit from the report.
+        ("Copy-paste floods", f"{sum(stats.get('floods', {}).values()):,}"),
         ("Active days", f"{active:,}"),
         ("Messages per active day",
          f"{stats['total'] / active:,.1f}" if active else "-"),
@@ -1798,7 +1992,8 @@ def all_time_totals(stats, analyses):
     ]
 
 
-def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top=10):
+def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top=10,
+                  charts=None):
     lines = [f"# {title} flashback", ""]
     lines.append(f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')}"
                  + (" (names anonymized)" if anonymized else "") + "")
@@ -1816,7 +2011,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
     lines.append("|---|---|---|")
     total = max(1, stats["total"])
     for member, count in stats["member_msgs"].most_common(top):
-        lines.append(f"| {member} | {count:,} | {100 * count / total:.1f}% |")
+        lines.append(f"| {member_label(member)} | {count:,} | {100 * count / total:.1f}% |")
     lines.append("")
 
     lines.append("## Yearly recaps")
@@ -1837,7 +2032,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
     lines.append("| Member | Messages | Words/msg | Peak hour | Night owl % | Signature word | Top emojis |")
     lines.append("|---|---|---|---|---|---|---|")
     for member, p in analyses["personality"].items():
-        lines.append(f"| {member} | {p['total_msgs']:,} | {p['avg_words']} | {p['peak_hour']}:00 "
+        lines.append(f"| {member_label(member)} | {p['total_msgs']:,} | {p['avg_words']} | {p['peak_hour']}:00 "
                      f"| {p['night_pct']}% | {p['signature'] or '-'} | {', '.join(p['top_emojis']) or '-'} |")
     lines.append("")
 
@@ -1850,7 +2045,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
     lines.append("| Reactor | Reactions given |")
     lines.append("|---|---|")
     for member, count in react["reactor"].most_common(top):
-        lines.append(f"| {member} | {count:,} |")
+        lines.append(f"| {member_label(member)} | {count:,} |")
     lines.append("")
 
     lines.append("## Response speed")
@@ -1861,10 +2056,10 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
     lines.append("| Member | Replies | Median reply | Replies <5 min | Ghosted % |")
     lines.append("|---|---|---|---|---|")
     for r in analyses["speed"]["table"]:
-        med = "-" if r["median_m"] is None else f"{r['median_m']} min"
         fast = "-" if r["fast5_pct"] is None else f"{r['fast5_pct']}%"
         ghost = "-" if r["ghost_pct"] is None else f"{r['ghost_pct']}%"
-        lines.append(f"| {r['member']} | {r['replies']} | {med} | {fast} | {ghost} |")
+        lines.append(f"| {member_label(r['member'])} | {r['replies']} "
+                     f"| {_fmt_duration(r['median_s'])} | {fast} | {ghost} |")
     lines.append("")
 
     swear = analyses["swear"]
@@ -1877,7 +2072,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
         lines.append("|---|---|---|")
         for member, count in swear["member_hits"].most_common(top):
             sig = swear["member_words"][member].most_common(1)[0][0] if swear["member_words"][member] else "-"
-            lines.append(f"| {member} | {count} | {sig} |")
+            lines.append(f"| {member_label(member)} | {count} | {sig} |")
     else:
         lines.append("None detected in this thread.")
     lines.append("")
@@ -1927,7 +2122,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
                              key=lambda m: (-sum(media[k].get(m, 0) for k in
                                                  ("photos", "stickers", "gifs",
                                                   "videos", "audio", "files")), m)):
-            lines.append(f"| {member} | {media['photos'].get(member, 0)} | "
+            lines.append(f"| {member_label(member)} | {media['photos'].get(member, 0)} | "
                          f"{media['stickers'].get(member, 0)} | {media['gifs'].get(member, 0)} | "
                          f"{media['videos'].get(member, 0)} | {media['audio'].get(member, 0)} | "
                          f"{media['files'].get(member, 0)} |")
@@ -1943,17 +2138,26 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
         lines.append("| Member | Sessions started |")
         lines.append("|---|---|")
         for member, count in conv["starters"].most_common(top):
-            lines.append(f"| {member} | {count} |")
+            lines.append(f"| {member_label(member)} | {count} |")
         if conv["longest_run"]:
             run = conv["longest_run"]
             lines.append("")
+            # Both ends carry their date: a session running past midnight
+            # otherwise printed as "10:25 - 01:22" and read as going backwards.
             lines.append(f"Longest single session: **{conv['longest_run_len']}** messages "
                          f"({run[0]['dt'].strftime('%Y-%m-%d %H:%M')} - "
-                         f"{run[-1]['dt'].strftime('%H:%M')}).")
+                         f"{run[-1]['dt'].strftime('%Y-%m-%d %H:%M')}).")
         lines.append("")
 
     chains = analyses.get("reply_chains")
-    if chains and chains["top_chains"]:
+    if chains is None:
+        # Same courtesy the calls line gets: an export without message ids
+        # cannot have its threads rebuilt, and that is not the same as none.
+        lines.append("## Reply chains")
+        lines.append("")
+        lines.append("Unavailable: this export has no message ids to link replies by.")
+        lines.append("")
+    elif chains["top_chains"]:
         lines.append("## Reply chains")
         lines.append("")
         lines.append(f"**{chains['count']}** messages were part of a reply chain of 2+.")
@@ -1978,7 +2182,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
         lines.append("| Member | Longest silence (days) |")
         lines.append("|---|---|")
         for member, gap in sorted(ghosts.items(), key=lambda kv: -kv[1]):
-            lines.append(f"| {member} | {gap} |")
+            lines.append(f"| {member_label(member)} | {gap} |")
         lines.append("")
 
     lengths = analyses.get("length_trends", {})
@@ -2001,7 +2205,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
         lines.append("| Member | Avg sentiment (-1 to +1) |")
         lines.append("|---|---|")
         for member, score in sorted(senti["per_member"].items(), key=lambda kv: -kv[1]):
-            lines.append(f"| {member} | {score:+.3f} |")
+            lines.append(f"| {member_label(member)} | {score:+.3f} |")
         lines.append("")
 
     ex = analyses.get("extremes")
@@ -2067,7 +2271,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
         lines.append("| Member | Peak hour |")
         lines.append("|---|---|")
         for member, hour in sorted(peak_hours):
-            lines.append(f"| {member} | {hour}:00 |")
+            lines.append(f"| {member_label(member)} | {hour}:00 |")
         lines.append("")
 
     mono = analyses.get("monologues")
@@ -2080,7 +2284,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
         lines.append("| Member | Longest solo run |")
         lines.append("|---|---|")
         for member, length in mono["per_member_longest"].most_common(top):
-            lines.append(f"| {member} | {length} |")
+            lines.append(f"| {member_label(member)} | {length} |")
         run = mono["longest_run"]
         lines.append("")
         lines.append(f"Record solo run: **{run[0]['sender']}** with {len(run)} messages "
@@ -2096,7 +2300,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
         lines.append("| Member | Unsent |")
         lines.append("|---|---|")
         for member, count in unsent.most_common(top):
-            lines.append(f"| {member} | {count} |")
+            lines.append(f"| {member_label(member)} | {count} |")
         lines.append("")
 
     taken_down = analyses.get("taken_down")
@@ -2108,7 +2312,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
         lines.append("| Member | Removed |")
         lines.append("|---|---|")
         for member, count in taken_down.most_common(top):
-            lines.append(f"| {member} | {count} |")
+            lines.append(f"| {member_label(member)} | {count} |")
         lines.append("")
 
     emo = analyses.get("emojis")
@@ -2123,7 +2327,7 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
                                        key=lambda kv: -sum(kv[1].values())):
             top3 = ", ".join(e for e, _ in counter.most_common(3))
             per100 = emo["emojis_per_100"].get(member, 0)
-            lines.append(f"| {member} | {sum(counter.values()):,} | {per100} | {top3} |")
+            lines.append(f"| {member_label(member)} | {sum(counter.values()):,} | {per100} | {top3} |")
         lines.append("")
 
     qst = analyses.get("questions")
@@ -2132,14 +2336,14 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
         lines.append("")
         lines.append(f"**{qst['total_questions']}** questions asked; "
                      f"**{qst['total_answered']}** got a reply within an hour "
-                     f"({100 * qst['total_answered'] / max(1, qst['total_questions']):.0f}%).")
+                     f"({_pct(qst['total_answered'], qst['total_questions'])}%).")
         lines.append("")
         lines.append("| Member | Asked | Answered | Answer % | Responses given | Median answer |")
         lines.append("|---|---|---|---|---|---|")
         for r in qst["table"]:
             ans = "n/a" if r["answer_pct"] is None else f"{r['answer_pct']}%"
-            med = "n/a" if r["median_m"] is None else f"{r['median_m']} min"
-            lines.append(f"| {r['member']} | {r['asked']} | {r['answered']} | {ans} "
+            med = "n/a" if r["median_s"] is None else _fmt_duration(r["median_s"])
+            lines.append(f"| {member_label(r['member'])} | {r['asked']} | {r['answered']} | {ans} "
                          f"| {r['responses_given']} | {med} |")
         lines.append("")
 
@@ -2174,7 +2378,8 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates, top
 
     lines.append("## Charts")
     lines.append("")
-    charts = sorted(p.name for p in out_dir.glob("*.png"))
+    if charts is None:
+        charts = sorted(p.name for p in out_dir.glob("*.png"))
     for c in charts:
         lines.append(f"![{c}]({c})")
         lines.append("")
@@ -2331,11 +2536,17 @@ def _year_page_html(title, year, recap, analyses, pngs):
     year_jokes = [j for j in jokes if year in j["years"]]
     jokes_html = ""
     if year_jokes:
+        # This year's numbers. Printing the lifetime count here made every year
+        # page claim the same 1,125 uses of a phrase said across nine years.
+        year_jokes.sort(key=lambda j: -j.get("by_year", {}).get(year, j["count"]))
         rows = "".join(
-            f"<tr><td><i>{html_lib.escape(j['phrase'])}</i></td><td>{j['count']}</td>"
-            f"<td>{html_lib.escape(', '.join(j['members']))}</td></tr>"
+            f"<tr><td><i>{html_lib.escape(j['phrase'])}</i></td>"
+            f"<td>{j.get('by_year', {}).get(year, j['count'])}</td>"
+            f"<td>{html_lib.escape(', '.join(member_label(n) for n in j.get('members_by_year', {}).get(year, j['members'])))}</td></tr>"
             for j in year_jokes)
-        jokes_html = f"<h2>Running jokes</h2><table><tr><th>Phrase</th><th>Times</th><th>Members</th></tr>{rows}</table>"
+        jokes_html = (f"<h2>Running jokes in {year}</h2><table>"
+                      f"<tr><th>Phrase</th><th>Times in {year}</th><th>Members</th></tr>"
+                      f"{rows}</table>")
 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -2362,6 +2573,219 @@ t.onclick=function(){{var dark=document.body.dataset.theme!=='dark';document.bod
 </body></html>"""
 
 
+_NARRATIVE_PAGES = [("report.html", "Report"), ("year_in_review.html", "Years"),
+                    ("group_history.html", "Group history"),
+                    ("relationships.html", "Relationships"), ("eras.html", "Eras")]
+
+
+def _narrative_page(title, current, heading, subtitle, body):
+    """One of the narrative pages, in the same frame as the year pages."""
+    links = "".join(f'<a href="{href}">{label}</a>'
+                    for href, label in _NARRATIVE_PAGES if href != current)
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html_lib.escape(title)} - {html_lib.escape(heading.lower())}</title>
+<style>{_YEAR_PAGE_CSS}</style>
+</head><body>
+<div class="topbar"><span class="brand">{html_lib.escape(title)} flashback</span>
+{links}
+<button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
+<main>
+<h1>{html_lib.escape(heading)}</h1>
+<p class="muted">{subtitle}</p>
+{body}
+</main>
+<script>
+var t=document.getElementById('theme');
+t.onclick=function(){{var dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';t.textContent=dark?'Light':'Dark';}};
+</script>
+</body></html>"""
+
+
+def _rows(columns, rows):
+    """A table, or nothing at all when there is nothing to put in it."""
+    if not rows:
+        return ""
+    return _table(columns, rows)
+
+
+def _group_history_html(title, history):
+    esc = html_lib.escape
+    names = _rows(["Name", "From", "Until", "Set by"],
+                  [(f"<b>{esc(n['name'])}</b>", n["date"], n["until"] or "still current",
+                    esc(n["by"])) for n in reversed(history["names"])])
+    nick_blocks = []
+    for member, entries in history["nicknames"].items():
+        rows = [(esc(e["nickname"]), e["from"], e["until"] or "still current", esc(e["by"]))
+                for e in reversed(entries)]
+        nick_blocks.append(f"<h3>{esc(member_label(member))}</h3>"
+                           + _rows(["Nickname", "From", "Until", "Set by"], rows))
+    membership = _rows(["Date", "What", "Who"],
+                       [(e["date"], history["labels"].get(e["kind"], e["kind"]),
+                         esc(e["target"] if e["kind"] in ("added", "removed") else e["actor"]))
+                        for e in history["membership"]])
+    busiest = _rows(["Member", "Changes"],
+                    [(esc(member_label(m)), f"{c:,}") for m, c in history["busiest"].most_common(10)])
+    kinds = _rows(["Kind", "Times"],
+                  [(esc(history["labels"].get(k, k)), f"{c:,}")
+                   for k, c in history["kinds"].most_common()])
+    body = "".join([
+        _sec("names", "What the group has called itself", names or "<p>No renames.</p>"),
+        _sec("nicknames", "Nicknames", "".join(nick_blocks) or "<p>No nicknames.</p>"),
+        _sec("who", "Who changes things", busiest + kinds),
+        _sec("membership", "Comings and goings", membership or "<p>Nobody joined or left.</p>"),
+    ])
+    current = history["current_name"] or "-"
+    subtitle = (f"{history['total']:,} changes the group made to itself. "
+                f"Currently called <b>{esc(current)}</b>.")
+    return _narrative_page(title, "group_history.html", "Group history", subtitle, body)
+
+
+def _relationships_html(title, rel):
+    esc = html_lib.escape
+    years = sorted({y for p in rel["all_pairs"] for y in p["by_year"]})
+    head = ["Pair", "Interactions"] + [str(y) for y in years]
+    pair_rows = []
+    for p in rel["pairs"]:
+        cells = [esc(" + ".join(member_label(n) for n in p["pair"])), f"{p['total']:,}"]
+        cells += [f"{p['by_year'].get(y, 0):,}" for y in years]
+        pair_rows.append(tuple(cells))
+    drift_rows = [(esc(" + ".join(member_label(n) for n in d["pair"])),
+                   esc(member_label(d["member"])), str(d["peak_year"]),
+                   f"{d['was_pct']}%", f"{d['now_pct']}%", f"{d['change_pct']:+.0f}%")
+                  for d in rel["drift"][:20]]
+    silence = _rows(["Member", "Times"],
+                    [(esc(member_label(m)), str(c))
+                     for m, c in rel["first_after_silence"].most_common(10)])
+    last = _rows(["Member", "Sessions ended"],
+                 [(esc(member_label(m)), f"{c:,}") for m, c in rel["last_word"].most_common(10)])
+    ignored = _rows(["Member", "Unanswered", "Messages", "Share"],
+                    [(esc(member_label(r["member"])), f"{r['unanswered']:,}",
+                      f"{r['messages']:,}", f"{r['pct']}%") for r in rel["ignored"]])
+    recent = rel["full_years"][-1] if rel["full_years"] else None
+    drift_note = (f"<p class='muted'>Share of that member's own interaction, from the pair's "
+                  f"peak year to {recent}, the most recent year the export covers end to end. "
+                  f"Pairs under {rel['min_interactions']} interactions in their peak year are "
+                  f"left out.</p>" if recent else "")
+    body = "".join([
+        _sec("pairs", "Who interacts with whom",
+             "<p class='muted'>A reply inside the hour, or a reaction.</p>"
+             + _rows(head, pair_rows)),
+        _sec("drift", "Pairs that drifted",
+             drift_note + (_rows(["Pair", "Member", "Peak", "Then", "Now", "Change"], drift_rows)
+                           or "<p>No pair moved by more than half.</p>")),
+        _sec("silence", "First to speak after a day of silence", silence),
+        _sec("lastword", "Who gets the last word", last),
+        _sec("ignored", "Who goes unanswered",
+             "<p class='muted'>Share of a member's own messages that nobody answered within "
+             "the hour, so the loudest member does not win by volume.</p>" + ignored),
+    ])
+    return _narrative_page(title, "relationships.html", "Relationships",
+                           f"{len(rel['members'])} members, "
+                           f"{len(rel['all_pairs'])} pairs that ever interacted.", body)
+
+
+def _eras_html(title, eras, turnover):
+    esc = html_lib.escape
+    cards = "".join(
+        f"<div class='card'><b>{esc(e['name'])}</b>"
+        f"<span>{e['start']} to {e['end']} &middot; {e['messages']:,} messages</span></div>"
+        for e in eras["eras"])
+    era_rows = [(f"<b>{esc(e['name'])}</b>", f"{e['start']} to {e['end']}", str(e["months"]),
+                 f"{e['messages']:,}", esc(member_label(e["top_member"] or "-")),
+                 esc(", ".join(w["word"] for w in e["words"])))
+                for e in eras["eras"]]
+    born_rows = []
+    for year in turnover["years"]:
+        born = ", ".join(w["word"] for w in turnover["born"].get(year, []))
+        died = ", ".join(w["word"] for w in turnover["died"].get(year, []))
+        if born or died:
+            born_rows.append((str(year), esc(born) or "-", esc(died) or "-"))
+    era_block = (_rows(["Era", "Span", "Months", "Messages", "Loudest", "Words it made its own"],
+                       era_rows)
+                 if eras["eras"] else
+                 f"<p>{esc(eras.get('reason') or 'Not enough history to segment.')}</p>")
+    body = "".join([
+        _sec("eras", "Eras",
+             "<p class='muted'>A month opens a new era when the three months from it carry "
+             "less than half or more than double the messages of the three before it, or when "
+             "fewer than a third of the previous quarter's top words survive into this one. "
+             "Each era is named for the word it uses most out of proportion to the rest of "
+             "the chat.</p>"
+             + (f"<div class='cards'>{cards}</div>" if cards else "") + era_block),
+        _sec("turnover", "Words born and words that died",
+             "<p class='muted'>A word is born the year it is first said and dies the year it "
+             "is last said. Every word alive at the end would die in the final year, so that "
+             "year is left out.</p>"
+             + _rows(["Year", "First said", "Last said"], born_rows)),
+    ])
+    span = (f"{eras['months'][0]} to {eras['months'][-1]}" if eras.get("months") else "")
+    count = len(eras["eras"])
+    return _narrative_page(title, "eras.html", "Eras",
+                           f"{count} period{'' if count == 1 else 's'} across {span}.", body)
+
+
+def _member_page_html(title, profile):
+    esc = html_lib.escape
+    member = profile["member"]
+    cards = "".join([
+        f"<div class='card'><b>{profile['total']:,}</b><span>messages</span></div>",
+        f"<div class='card'><b>{profile['share']}%</b><span>of the chat</span></div>",
+        f"<div class='card'><b>{profile['peak_year']}</b><span>peak year</span></div>",
+        f"<div class='card'><b>{profile['active_days']:,}</b><span>days spoken on</span></div>",
+    ])
+    year_rows = [(str(y), f"{c:,}",
+                  esc(", ".join(w["word"] for w in profile["words_by_year"].get(y, []))))
+                 for y, c in sorted(profile["by_year"].items())]
+    closest = _rows(["Member", "Replies"],
+                    [(esc(member_label(n)), f"{c:,}") for n, c in profile["closest"]])
+    talk_years = sorted(profile["talks_to"])
+    others = sorted({n for row in profile["talks_to"].values() for n in row})
+    talk_rows = [tuple([esc(member_label(other))]
+                       + [f"{profile['talks_to'][y].get(other, 0):,}" for y in talk_years])
+                 for other in others]
+    reacted = "".join(
+        f"<li>{len(m['reactions'])} reactions &middot; {m['dt'].strftime('%Y-%m-%d')} &middot; "
+        f"&quot;{esc(_shorten(m['content'], 90))}&quot;</li>"
+        for m in profile["top_reacted"])
+    body = "".join([
+        f"<div class='cards'>{cards}</div>",
+        _sec("years", "Year by year",
+             "<p class='muted'>The words are what set that year apart from this member's own "
+             "other years, not what they said most.</p>"
+             + _rows(["Year", "Messages", "Words of that year"], year_rows)),
+        _sec("closest", "Who they answer", closest
+             + _rows(["Member"] + [str(y) for y in talk_years], talk_rows)),
+        _sec("reacted", "Their most-reacted messages",
+             f"<ul>{reacted}</ul>" if reacted else "<p>Nobody ever reacted to them.</p>"),
+    ])
+    return _narrative_page(title, None, member_label(member),
+                           f"Active {profile['first']} to {profile['last']}.", body)
+
+
+def write_narrative_pages(title, analyses, out_dir):
+    """The group's history, its pairs, its eras, and a page per member."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    history = analyses.get("group_history")
+    if history:
+        (out_dir / "group_history.html").write_text(
+            _group_history_html(title, history), encoding="utf-8")
+    rel = analyses.get("relationships")
+    if rel:
+        (out_dir / "relationships.html").write_text(
+            _relationships_html(title, rel), encoding="utf-8")
+    eras = analyses.get("eras")
+    if eras:
+        (out_dir / "eras.html").write_text(
+            _eras_html(title, eras, analyses.get("turnover") or {"years": [], "born": {}, "died": {}}),
+            encoding="utf-8")
+    for member, profile in (analyses.get("member_profiles") or {}).items():
+        if profile:
+            (out_dir / f"member_{_slug(member)}.html").write_text(
+                _member_page_html(title, profile), encoding="utf-8")
+
+
 def _js_msg(m):
     if m is None:
         return None
@@ -2386,7 +2810,7 @@ def insights(stats, analyses):
     fastest = _fastest_replier(analyses.get("speed"))
     if fastest:
         out.append(f"{fastest['member']} answers fastest with a "
-                   f"{fastest['median_m']} min median reply time.")
+                   f"{_fmt_duration(fastest['median_s'])} median reply time.")
     ghosts = analyses.get("ghosting", {})
     if ghosts:
         worst = max(ghosts.items(), key=lambda kv: kv[1])
@@ -2404,8 +2828,11 @@ def insights(stats, analyses):
                        f"({best_pair[2]} times).")
     senti = analyses.get("sentiment")
     if senti and senti["per_member"]:
-        best = max(senti["per_member"].items(), key=lambda kv: kv[1])
-        out.append(f"Best vibes come from {best[0]} ({best[1]:+.2f} avg sentiment).")
+        # A bot is relentlessly upbeat and would own this line forever.
+        human = {m: s for m, s in senti["per_member"].items() if not is_bot(m)}
+        if human:
+            best = max(human.items(), key=lambda kv: kv[1])
+            out.append(f"Best vibes come from {best[0]} ({best[1]:+.2f} avg sentiment).")
     ex = analyses.get("extremes")
     if ex:
         out.append(f"The record day was {ex['record_day']} with "
@@ -2473,6 +2900,16 @@ CHART_CAPTIONS = {
 }
 
 
+# Short forms for the sticky nav, where a full heading would not fit.
+NAV_LABELS = {
+    "personalities": "Personalities", "reactive": "Reactive", "pair_dynamics": "Pairs",
+    "weirdest": "Weirdest", "emojis": "Emoji", "questions": "Questions",
+    "topics": "Topics", "jokes": "Jokes", "media": "Media", "speed": "Speed",
+    "swear": "Swearing", "starters": "Starters", "ghosting": "Ghosting",
+    "hourly": "Hours", "lengths": "Lengths", "domains": "Domains",
+}
+
+
 def _sec(sid, title, inner):
     return f'<section id="{sid}"><h2>{title}</h2>{inner}</section>'
 
@@ -2487,21 +2924,33 @@ def _table(columns, rows):
     return f"<table>{_thead(columns)}{body}</table>"
 
 
-def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10):
-    charts = sorted(out_dir.glob("*.png"))
+def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10,
+                      charts=None):
+    names = charts if charts is not None else sorted(p.name for p in out_dir.glob("*.png"))
     imgs = "".join(
-        f'<figure><img loading="lazy" src="data:image/png;base64,{_base64_png(c)}" '
-        f'alt="{html_lib.escape(c.name)}"/>'
-        f"<figcaption>{html_lib.escape(CHART_CAPTIONS.get(c.name, c.name))}</figcaption></figure>"
-        for c in charts
+        f'<figure><img loading="lazy" src="data:image/png;base64,{_base64_png(out_dir / name)}" '
+        f'alt="{html_lib.escape(name)}"/>'
+        f"<figcaption>{html_lib.escape(CHART_CAPTIONS.get(name, name))}</figcaption></figure>"
+        for name in names
     )
     react = analyses["reactions"]
     senti = analyses.get("sentiment")
     ex = analyses.get("extremes")
 
-    leader_rows = [(html_lib.escape(m), f"{c:,}", f"{100 * c / max(1, stats['total']):.1f}%")
+    def cell(name):
+        return html_lib.escape(member_label(name))
+
+    profiles = analyses.get("member_profiles") or {}
+
+    def member_cell(name):
+        """Linked to that member's page, when one was written for them."""
+        if profiles.get(name):
+            return f"<a href='member_{_slug(name)}.html'>{cell(name)}</a>"
+        return cell(name)
+
+    leader_rows = [(member_cell(m), f"{c:,}", f"{100 * c / max(1, stats['total']):.1f}%")
                    for m, c in stats["member_msgs"].most_common(top)]
-    reactor_rows = [(html_lib.escape(m), f"{c:,}") for m, c in react["reactor"].most_common(top)]
+    reactor_rows = [(cell(m), f"{c:,}") for m, c in react["reactor"].most_common(top)]
 
     sections = []
     sections.append(_sec("highlights", "Highlights",
@@ -2509,26 +2958,109 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
                                           for i in insights(stats, analyses)) + "</ul>"))
     sections.append(_sec("leaderboard", "Leaderboard",
                          _table(["Member", "Messages", "Share"], leader_rows)))
+
+    # Everything below existed only in summary.md until now, so the "same report
+    # in one file" was in fact a subset of it.
+    personality = analyses.get("personality")
+    if personality:
+        rows = [(member_cell(m), f"{p['total_msgs']:,}", str(p["avg_words"]),
+                 f"{p['peak_hour']}:00", f"{p['night_pct']}%",
+                 html_lib.escape(p["signature"] or "-"),
+                 " ".join(p["top_emojis"]) or "-")
+                for m, p in personality.items()]
+        sections.append(_sec("personalities", "Member personalities",
+                             _table(["Member", "Messages", "Words/msg", "Peak hour",
+                                     "Night owl %", "Signature word", "Top emojis"], rows)))
     sections.append(_sec("reactive", "Most reactive",
                          _table(["Reactor", "Reactions"], reactor_rows)))
+
+    speed = analyses.get("speed")
+    if speed and speed["table"]:
+        rows = [(cell(r["member"]), str(r["replies"]), _fmt_duration(r["median_s"]),
+                 "-" if r["fast5_pct"] is None else f"{r['fast5_pct']}%",
+                 "-" if r["ghost_pct"] is None else f"{r['ghost_pct']}%")
+                for r in speed["table"]]
+        sections.append(_sec("speed", "Response speed",
+                             "<p class='muted'>Median time to reply, fastest first. "
+                             "Ghosted % is the share of a member's turns that got no "
+                             "reply within an hour.</p>"
+                             + _table(["Member", "Replies", "Median reply",
+                                       "Replies <5 min", "Ghosted %"], rows)))
+
+    swear = analyses.get("swear")
+    if swear and swear["total_hits"]:
+        rows = []
+        for member, count in swear["member_hits"].most_common(top):
+            words = swear["member_words"][member]
+            sig = words.most_common(1)[0][0] if words else "-"
+            rows.append((cell(member), f"{count:,}", html_lib.escape(sig)))
+        sections.append(_sec("swear", "Swear-word analytics",
+                             f"<p class='muted'>{swear['total_hits']:,} messages "
+                             f"contain profanity.</p>"
+                             + _table(["Member", "Swear messages",
+                                       "Signature swear word"], rows)))
 
     pm = analyses.get("pair_matrices")
     if pm:
         rows = []
         for a in pm["members"]:
-            row = [html_lib.escape(a)]
+            row = [cell(a)]
             for b in pm["members"]:
                 n = pm["reply"][a].get(b, 0)
                 row.append(str(n))
             rows.append(row)
         sections.append(_sec("pair_dynamics", "Pair dynamics",
-                             _table(["Replier \\n Replied-to"] + [html_lib.escape(m) for m in pm["members"]], rows)))
+                             _table(["Replier \\n Replied-to"] + [member_label(m) for m in pm["members"]], rows)))
+    conv = analyses.get("conversations")
+    if conv and conv["starters"]:
+        rows = [(cell(m), f"{c:,}") for m, c in conv["starters"].most_common(top)]
+        sections.append(_sec("starters", "Conversation starters",
+                             f"<p class='muted'>A conversation is split on a 30-minute "
+                             f"gap. The chat had {conv['conversation_count']:,} "
+                             f"separate sessions.</p>"
+                             + _table(["Member", "Sessions started"], rows)))
+
+    ghosts = analyses.get("ghosting")
+    if ghosts:
+        rows = [(cell(m), f"{g:,}")
+                for m, g in sorted(ghosts.items(), key=lambda kv: -kv[1])]
+        sections.append(_sec("ghosting", "Ghosting stats",
+                             "<p class='muted'>Longest silence between a member's own "
+                             "messages, in days.</p>"
+                             + _table(["Member", "Longest silence (days)"], rows)))
+
     mono = analyses.get("monologues")
     if mono and mono["per_member_longest"]:
-        rows = [(html_lib.escape(m), str(n))
+        rows = [(cell(m), str(n))
                 for m, n in mono["per_member_longest"].most_common(top)]
         sections.append(_sec("monologues", "Monologues",
                              _table(["Member", "Longest solo run"], rows)))
+
+    radar = analyses.get("radar")
+    if radar:
+        rows = sorted((cell(m), f"{max(range(24), key=lambda h: hours[h])}:00")
+                      for m, hours in radar.items())
+        sections.append(_sec("hourly", "Hourly profiles",
+                             _table(["Member", "Peak hour"], rows)))
+
+    lengths = analyses.get("length_trends")
+    if lengths:
+        rows = [(str(y), str(v["avg_chars"]), f"{v['max_chars']:,}")
+                for y, v in lengths.items()]
+        sections.append(_sec("lengths", "Message length trends",
+                             _table(["Year", "Avg chars", "Longest"], rows)))
+
+    ld = analyses.get("links_domains")
+    if ld and ld["domains"]:
+        rows = [(html_lib.escape(d), f"{c:,}") for d, c in ld["domains"].most_common(top)]
+        sections.append(_sec("domains", "Links and domains",
+                             _table(["Domain", "Shares"], rows)))
+
+    unsent = analyses.get("unsent")
+    if unsent and any(unsent.values()):
+        rows = [(cell(m), f"{c:,}") for m, c in unsent.most_common(top)]
+        sections.append(_sec("unsent", "Unsent messages",
+                             _table(["Member", "Unsent"], rows)))
 
     weird_items = "".join(
         f"<li><b>{html_lib.escape(s['member'])}</b> ({s['dt'].strftime('%Y-%m-%d %H:%M')}) "
@@ -2556,7 +3088,7 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
         sections.append(_sec("extremes", "Extremes", extremes_block))
 
     if senti:
-        rows = [(html_lib.escape(m), f"{score:+.3f}")
+        rows = [(cell(m), f"{score:+.3f}")
                 for m, score in sorted(senti["per_member"].items(), key=lambda kv: -kv[1])]
         sections.append(_sec("sentiment", "Sentiment",
                              f"<p class='muted'>Scored {senti['messages_scored']} messages; "
@@ -2567,7 +3099,7 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
         rows = []
         for member, counter in sorted(emo["per_member"].items(),
                                       key=lambda kv: -sum(kv[1].values())):
-            rows.append((html_lib.escape(member), f"{sum(counter.values()):,}",
+            rows.append((cell(member), f"{sum(counter.values()):,}",
                          str(emo["emojis_per_100"].get(member, 0)),
                          " ".join(e for e, _ in counter.most_common(3))))
         sections.append(_sec("emojis", "Emoji report",
@@ -2577,8 +3109,8 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
         rows = []
         for r in qst["table"]:
             ans = "n/a" if r["answer_pct"] is None else f"{r['answer_pct']}%"
-            med = "n/a" if r["median_m"] is None else f"{r['median_m']} min"
-            rows.append((html_lib.escape(r["member"]), str(r["asked"]), str(r["answered"]),
+            med = "n/a" if r["median_s"] is None else _fmt_duration(r["median_s"])
+            rows.append((cell(r["member"]), str(r["asked"]), str(r["answered"]),
                          ans, str(r["responses_given"]), med))
         sections.append(_sec("questions", "Question dynamics",
                              f"<p class='muted'>{qst['total_questions']} questions asked; "
@@ -2598,7 +3130,7 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
         rows = []
         for j in jokes["jokes"]:
             rows.append((f"<i>{html_lib.escape(j['phrase'])}</i>", str(j["count"]),
-                         html_lib.escape(", ".join(j["members"])),
+                         html_lib.escape(", ".join(member_label(n) for n in j["members"])),
                          html_lib.escape(", ".join(str(y) for y in j["years"]))))
         example = jokes["jokes"][0].get("example")
         ex_html = (f"<p class='muted'>Example: &quot;{html_lib.escape(example)}&quot;</p>"
@@ -2613,7 +3145,7 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
                              key=lambda m: (-sum(media[k].get(m, 0) for k in
                                                  ("photos", "stickers", "gifs",
                                                   "videos", "audio", "files")), m)):
-            rows.append((html_lib.escape(member),
+            rows.append((cell(member),
                          *[str(media[k].get(member, 0)) for k in
                            ("photos", "stickers", "gifs", "videos", "audio", "files")]))
         sections.append(_sec("media", "Media leaderboard",
@@ -2621,23 +3153,28 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
                                      "Videos", "Audio", "Files"], rows)))
     sections.append(_sec("charts", "Charts", imgs))
 
+    # Derived from the sections that were actually built, so a section can never
+    # be added without a link, or linked after being skipped for lack of data.
+    joined = "".join(sections)
     nav = "".join(
-        f'<a href="#{sid}">{html_lib.escape(label)}</a>'
-        for sid, label in [("highlights", "Highlights"), ("leaderboard", "Leaderboard"),
-                           ("reactive", "Reactive"), ("pair_dynamics", "Pairs"),
-                           ("monologues", "Monologues"), ("weirdest", "Weirdest"),
-                           ("extremes", "Extremes"), ("sentiment", "Sentiment"),
-                           ("emojis", "Emoji report"), ("questions", "Questions"),
-                           ("topics", "Topics"), ("jokes", "Jokes"),
-                           ("media", "Media"), ("charts", "Charts")]
-    )
+        f'<a href="#{sid}">{html_lib.escape(NAV_LABELS.get(sid, heading))}</a>'
+        for sid, heading in re.findall(r'<section id="([^"]+)"><h2>([^<]*)</h2>', joined))
     totals_cards = "".join(
         f"<div class='card'><b>{html_lib.escape(value)}</b>"
         f"<span>{html_lib.escape(label.lower())}</span></div>"
         for label, value in all_time_totals(stats, analyses))
+    # The sibling pages, linked only when the run actually wrote them.
+    written = {"year_in_review.html": True,
+               "group_history.html": bool(analyses.get("group_history")),
+               "relationships.html": bool(analyses.get("relationships")),
+               "eras.html": bool(analyses.get("eras"))}
+    extra_pages = '<span class="pages">' + "".join(
+        f'<a class="years" href="{href}">{label}</a>'
+        for href, label in _NARRATIVE_PAGES
+        if href != "report.html" and written.get(href)) + "</span>"
     body = f"""<div class="topbar"><span class="brand">{html_lib.escape(title)} flashback</span>
 <nav>{nav}</nav>
-<a class="years" href="year_in_review.html">Years</a>
+{extra_pages}
 <button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
 <main>
 <h1>{html_lib.escape(title)} flashback</h1>
@@ -2648,7 +3185,7 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
 <div class="card"><b>{dates[-1]}</b><span>end</span></div>
 {totals_cards}
 </div>
-{''.join(sections)}
+{joined}
 </main>"""
     doc = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -2665,7 +3202,8 @@ body{{font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;padding:0 0 60px
 nav{{display:flex;gap:4px;flex-wrap:wrap;flex:1}}
 nav a{{color:var(--muted);text-decoration:none;font-size:12px;padding:4px 8px;border-radius:6px}}
 nav a:hover{{background:var(--border);color:var(--fg)}}
-.years{{margin-left:auto;color:var(--muted);text-decoration:none;font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px}}
+.pages{{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}}
+.years{{color:var(--muted);text-decoration:none;font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px}}
 #theme{{border:1px solid var(--border);background:var(--bg);color:var(--fg);border-radius:6px;padding:4px 10px;cursor:pointer}}
 main{{max-width:1040px;margin:0 auto;padding:0 20px}}
 h1{{font-size:26px;margin-bottom:4px}}
@@ -2771,7 +3309,9 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates, top=1
             "top_links": [{"url": u, "count": c}
                           for u, c in analyses.get("links_domains", {}).get("links", {}).most_common(top)],
         },
-        "media": {m: {"photos": analyses["media"]["photos"].get(m, 0),
+        # Not "media": that is already the whole-chat count above, and a repeated
+        # key silently dropped one of the two.
+        "media_by_member": {m: {"photos": analyses["media"]["photos"].get(m, 0),
                       "stickers": analyses["media"]["stickers"].get(m, 0),
                       "gifs": analyses["media"]["gifs"].get(m, 0),
                       "videos": analyses["media"]["videos"].get(m, 0),
@@ -2846,6 +3386,32 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates, top=1
                                         "per_member": dict(d["per_member"]),
                                         "by_year": dict(d["by_year"])}
                                     for t, d in analyses["track"].items()}
+    history = analyses.get("group_history")
+    if history:
+        payload["group_history"] = {
+            "current_name": history["current_name"],
+            "names": history["names"],
+            "nicknames": history["nicknames"],
+            "membership": history["membership"],
+            "busiest": dict(history["busiest"].most_common(top)),
+            "kinds": dict(history["kinds"])}
+    rel = analyses.get("relationships")
+    if rel:
+        payload["relationships"] = {
+            "pairs": rel["all_pairs"], "drift": rel["drift"],
+            "first_after_silence": dict(rel["first_after_silence"]),
+            "last_word": dict(rel["last_word"]), "ignored": rel["ignored"]}
+    if analyses.get("eras"):
+        payload["eras"] = analyses["eras"]["eras"]
+    if analyses.get("turnover"):
+        payload["vocabulary_turnover"] = {"born": analyses["turnover"]["born"],
+                                          "died": analyses["turnover"]["died"]}
+    if analyses.get("member_profiles"):
+        # The messages a member's most-reacted list holds are whole message
+        # dicts; the JSON keeps the arc, not the message objects.
+        payload["members"] = {
+            member: {k: v for k, v in p.items() if k != "top_reacted"}
+            for member, p in analyses["member_profiles"].items() if p}
     (out_dir / "summary.json").write_text(
         json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -2900,7 +3466,7 @@ def console_summary(title, stats, analyses, dates):
     qst = analyses.get("questions")
     if qst and qst["total_questions"]:
         print(f"  Questions: {qst['total_questions']} asked, "
-              f"{100 * qst['total_answered'] // max(1, qst['total_questions'])}% answered")
+              f"{_pct(qst['total_answered'], qst['total_questions'])}% answered")
     jokes = analyses.get("jokes")
     if jokes and jokes["jokes"]:
         print(f"  Running joke: \"{jokes['jokes'][0]['phrase']}\"")
@@ -2946,6 +3512,13 @@ def process_thread(thread_dir, args):
         if not msgs:
             print(f"  [skip] {thread_dir}: no messages in {args.year}")
             return
+
+    # The cast, for dropping names from topics and jokes: everyone the export
+    # lists plus anyone --names adds, since a deleted account is listed under
+    # neither. Anonymization rewrites names in the text, so the real ones are
+    # no longer there to filter.
+    names = [] if args.anonymize else list(participants) + [
+        n.strip() for n in (args.names or "").split(",") if n.strip()]
 
     anonymized = False
     if args.anonymize:
@@ -2999,23 +3572,34 @@ def process_thread(thread_dir, args):
     if "wordcloud" not in skip:
         analyses["wordcloud"] = word_cloud_data(msgs)
     if "topics" not in skip:
-        analyses["topics"] = topic_words(msgs)
+        analyses["topics"] = topic_words(msgs, names=names)
     if "sentiment" not in skip:
         analyses["sentiment"] = sentiment_analysis(msgs)
     if "jokes" not in skip:
         _progress(args, "running jokes")
-        analyses["jokes"] = inside_jokes(msgs)
+        analyses["jokes"] = inside_jokes(msgs, names=names)
+    if "narratives" not in skip:
+        # Imported here rather than at the top: chatstats reads constants from
+        # this module while it is still being defined if both import eagerly.
+        import chatstats
+        _progress(args, "narratives")
+        analyses["group_history"] = chatstats.group_history(msgs)
+        analyses["relationships"] = chatstats.relationships(msgs, top=args.top)
+        analyses["eras"] = chatstats.eras(msgs, names=names)
+        analyses["turnover"] = chatstats.vocabulary_turnover(msgs, names=names)
+        analyses["member_profiles"] = chatstats.member_profiles(msgs, names=names)
 
     out_dir = Path(args.output) / _slug(title)
     _progress(args, "charts")
-    write_charts(msgs, stats, analyses, out_dir, track_terms, top=args.top)
+    charts = write_charts(msgs, stats, analyses, out_dir, track_terms, top=args.top)
     _progress(args, "writing")
     write_summary(title, stats, analyses, analyses["track"], out_dir, anonymized,
-                  [oldest[:10], newest[:10]], top=args.top)
+                  [oldest[:10], newest[:10]], top=args.top, charts=charts)
     write_report_html(title, stats, analyses, out_dir, anonymized,
-                      [oldest[:10], newest[:10]], top=args.top)
+                      [oldest[:10], newest[:10]], top=args.top, charts=charts)
     _progress(args, "year reviews")
     write_year_reviews(title, stats, analyses, out_dir)
+    write_narrative_pages(title, analyses, out_dir)
     if args.json:
         write_summary_json(title, stats, analyses, out_dir, anonymized,
                            [oldest[:10], newest[:10]], top=args.top)
@@ -3074,7 +3658,7 @@ def serve(thread_dirs, args):
         return 1
     print(f"\nStarting local chat reader on http://127.0.0.1:{args.port} "
           f"(localhost only)")
-    run_server(threads, args.port, args.output)
+    run_server(threads, args.port, args.output, build_index=not args.no_index)
     return 0
 
 
@@ -3361,11 +3945,19 @@ def main(argv=None):
                         help="Start the local chat reader web UI instead of writing reports")
     parser.add_argument("--port", type=int, default=8080,
                         help="Port for --serve (default: 8080)")
+    parser.add_argument("--no-index", action="store_true",
+                        help="Skip building the word-search index when serving. "
+                             "Starts faster; the word explorer is unavailable")
     parser.add_argument("--tz", default="",
                         help="Timezone for analysis, e.g. +03:00 or America/New_York "
                              "(Messenger timestamps are UTC; default is your system timezone)")
     parser.add_argument("--config", default="",
                         help="JSON config file with any of the CLI options")
+    parser.add_argument("--names", default="",
+                        help="Comma-separated names of people in the chat that the "
+                             "export does not list, e.g. a deleted account that shows "
+                             "as 'Facebook user'. Dropped from topic words and running "
+                             "jokes, where a name would otherwise read as a topic")
     parser.add_argument("--stopwords-file", default="",
                         help="Extra stopwords to ignore in word stats, one per line "
                              "(# comments ignored). The built-in list is English only, "
@@ -3399,4 +3991,11 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    # Run as a script, this module lives in sys.modules as "__main__" only, so
+    # `import analyze_chat` from chatstats or wordindex would load a second,
+    # separate copy of it. Everything they then read is that copy's: the
+    # stopwords --stopwords-file added at runtime are on this one, and their
+    # word lists silently came back unfiltered. Registering the running module
+    # under its own name makes every importer share it.
+    sys.modules.setdefault("analyze_chat", sys.modules["__main__"])
     sys.exit(main())

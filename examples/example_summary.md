@@ -1,13 +1,25 @@
 # Saturday Squad flashback
 
-Generated 2026-08-06 10:28
+Generated 2026-08-06 20:14
+
+## All-time totals
+
 - **Period**: 2017-01-01 to 2026-01-01
-- **Total messages**: 94
+- **Messages**: 94
 - **Members**: 4
-- **Longest daily streak**: 1 day
-- **Media (photos, stickers, GIFs, videos, audio, files)**: 4
+- **Words**: 509
+- **Emojis**: 1
+- **Reactions**: 18
+- **Questions asked**: 3
+- **Swear messages**: 3
+- **Media**: 4
 - **Links shared**: 4
 - **Calls**: 0 (0 min)
+- **Conversations**: 30
+- **Copy-paste floods**: 0
+- **Active days**: 27
+- **Messages per active day**: 3.5
+- **Longest daily streak**: 1 days
 
 ## Leaderboard
 
@@ -41,7 +53,7 @@ Generated 2026-08-06 10:28
 ### 2020
 - **13** messages, **4** members active
 - Top member: **Alice**
-- Top word: **out** (2x)
+- Top word: **whole** (2x)
 - Record day: **2020-10-03** (4 messages); most-reacted: started my own thing, gonna be...
 
 ### 2021
@@ -164,7 +176,7 @@ A conversation is split on a 30-minute gap. The chat had **30** separate session
 | Bob | 7 |
 | Charlie | 6 |
 
-Longest single session: **7** messages (2025-08-09 01:00 - 01:06).
+Longest single session: **7** messages (2025-08-09 01:00 - 2025-08-09 01:06).
 
 ## Reply chains
 
@@ -275,8 +287,8 @@ Record solo run: **Charlie** with 3 messages (2021-02-14 08:00).
 |---|---|---|---|---|---|
 | Charlie | 2 | 2 | 100.0% | 0 | n/a |
 | Alice | 1 | 1 | 100.0% | 0 | n/a |
-| Dana | 0 | 0 | n/a | 2 | 27.0 min |
 | Bob | 0 | 0 | n/a | 1 | 30.0 min |
+| Dana | 0 | 0 | n/a | 2 | 27.0 min |
 
 ## What the chat was about
 
@@ -285,7 +297,7 @@ Top topic words per year (tf-idf):
 - **2017**: **usual** (2), **spot** (2), **happy** (2), **told** (1), **stressing** (1), **saturday** (1)
 - **2018**: **morning** (2), **helmet** (2), **wow** (1), **since** (1), **rip** (1), **nerd** (1)
 - **2019**: **shawarma** (3), **trip** (2), **life** (2), **wedding** (1), **though** (1), **seriously** (1)
-- **2020**: **whole** (2), **out** (2), **hour** (2), **bro** (2), **woke** (1), **tried** (1)
+- **2020**: **whole** (2), **hour** (2), **bro** (2), **woke** (1), **tried** (1), **traffic** (1)
 - **2021**: **pregnant** (2), **work** (1), **quiet** (1), **news** (1), **moving** (1), **matches** (1)
 - **2022**: **send** (2), **party** (2), **full** (2), **said** (2), **wishing** (1), **unexpectedly** (1)
 - **2023**: **reunion** (2), **shawarma** (2), **thought** (1), **squad** (1), **real** (1), **place** (1)

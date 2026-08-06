@@ -1,40 +1,34 @@
 {
   "title": "Saturday Squad",
-  "generated": "2026-08-06 10:28",
+  "generated": "2026-08-06 20:14",
   "anonymized": false,
   "period": {
     "start": "2017-01-01",
     "end": "2026-01-01"
   },
   "total_messages": 94,
+  "totals": {
+    "Messages": "94",
+    "Members": "4",
+    "Words": "509",
+    "Emojis": "1",
+    "Reactions": "18",
+    "Questions asked": "3",
+    "Swear messages": "3",
+    "Media": "4",
+    "Links shared": "4",
+    "Calls": "0 (0 min)",
+    "Conversations": "30",
+    "Copy-paste floods": "0",
+    "Active days": "27",
+    "Messages per active day": "3.5",
+    "Longest daily streak": "1 days"
+  },
+  "total_words": 509,
+  "active_days": 27,
   "members": 4,
   "longest_streak_days": 1,
-  "media": {
-    "Alice": {
-      "photos": 2,
-      "stickers": 0,
-      "gifs": 0,
-      "videos": 0,
-      "audio": 0,
-      "files": 0
-    },
-    "Charlie": {
-      "photos": 1,
-      "stickers": 0,
-      "gifs": 0,
-      "videos": 0,
-      "audio": 0,
-      "files": 0
-    },
-    "Dana": {
-      "photos": 1,
-      "stickers": 0,
-      "gifs": 0,
-      "videos": 0,
-      "audio": 0,
-      "files": 0
-    }
-  },
+  "media": 4,
   "calls": 0,
   "leaderboard": [
     {
@@ -117,7 +111,7 @@
       "active_members": 4,
       "top_member": "Alice",
       "top_word": {
-        "word": "out",
+        "word": "whole",
         "count": 2
       },
       "top_emoji": null,
@@ -285,7 +279,7 @@
     ],
     "emoji_breakdown": [
       {
-        "emoji": "ð",
+        "emoji": "👍",
         "count": 10
       },
       {
@@ -293,7 +287,7 @@
         "count": 6
       },
       {
-        "emoji": "ð¤£",
+        "emoji": "🤣",
         "count": 2
       }
     ]
@@ -433,6 +427,32 @@
         "count": 1
       }
     ]
+  },
+  "media_by_member": {
+    "Alice": {
+      "photos": 2,
+      "stickers": 0,
+      "gifs": 0,
+      "videos": 0,
+      "audio": 0,
+      "files": 0
+    },
+    "Charlie": {
+      "photos": 1,
+      "stickers": 0,
+      "gifs": 0,
+      "videos": 0,
+      "audio": 0,
+      "files": 0
+    },
+    "Dana": {
+      "photos": 1,
+      "stickers": 0,
+      "gifs": 0,
+      "videos": 0,
+      "audio": 0,
+      "files": 0
+    }
   },
   "conversations": {
     "count": 30,
@@ -854,10 +874,6 @@
         "count": 2
       },
       {
-        "word": "out",
-        "count": 2
-      },
-      {
         "word": "whole",
         "count": 2
       },
@@ -871,10 +887,6 @@
       },
       {
         "word": "hour",
-        "count": 2
-      },
-      {
-        "word": "too",
         "count": 2
       },
       {
@@ -938,7 +950,15 @@
         "count": 1
       },
       {
-        "word": "pls",
+        "word": "dana",
+        "count": 1
+      },
+      {
+        "word": "obv",
+        "count": 1
+      },
+      {
+        "word": "saturday",
         "count": 1
       }
     ],
@@ -985,10 +1005,6 @@
           "count": 1
         },
         {
-          "word": "down",
-          "count": 1
-        },
-        {
           "word": "last",
           "count": 1
         },
@@ -1023,6 +1039,10 @@
         {
           "word": "anyone",
           "count": 1
+        },
+        {
+          "word": "else",
+          "count": 1
         }
       ],
       "Bob": [
@@ -1048,10 +1068,6 @@
         },
         {
           "word": "meet",
-          "count": 1
-        },
-        {
-          "word": "pls",
           "count": 1
         },
         {
@@ -1104,6 +1120,10 @@
         },
         {
           "word": "charlie's",
+          "count": 1
+        },
+        {
+          "word": "marrying",
           "count": 1
         }
       ],
@@ -1316,6 +1336,7 @@
         "answered": 2,
         "answer_pct": 100.0,
         "responses_given": 0,
+        "median_s": null,
         "median_m": null
       },
       {
@@ -1324,15 +1345,8 @@
         "answered": 1,
         "answer_pct": 100.0,
         "responses_given": 0,
+        "median_s": null,
         "median_m": null
-      },
-      {
-        "member": "Dana",
-        "asked": 0,
-        "answered": 0,
-        "answer_pct": null,
-        "responses_given": 2,
-        "median_m": 27.0
       },
       {
         "member": "Bob",
@@ -1340,7 +1354,17 @@
         "answered": 0,
         "answer_pct": null,
         "responses_given": 1,
+        "median_s": 1800.0,
         "median_m": 30.0
+      },
+      {
+        "member": "Dana",
+        "asked": 0,
+        "answered": 0,
+        "answer_pct": null,
+        "responses_given": 2,
+        "median_s": 1620.0,
+        "median_m": 27.0
       }
     ]
   },
@@ -1348,32 +1372,32 @@
     "2017": [
       {
         "word": "usual",
-        "score": 0.1785,
+        "score": 0.1943,
         "count": 2
       },
       {
         "word": "spot",
-        "score": 0.1411,
+        "score": 0.1535,
         "count": 2
       },
       {
         "word": "happy",
-        "score": 0.1411,
+        "score": 0.1535,
         "count": 2
       },
       {
         "word": "told",
-        "score": 0.0893,
+        "score": 0.0971,
         "count": 1
       },
       {
         "word": "stressing",
-        "score": 0.0893,
+        "score": 0.0971,
         "count": 1
       },
       {
         "word": "saturday",
-        "score": 0.0893,
+        "score": 0.0971,
         "count": 1
       }
     ],
@@ -1412,96 +1436,96 @@
     "2019": [
       {
         "word": "shawarma",
-        "score": 0.2609,
+        "score": 0.2699,
         "count": 3
       },
       {
         "word": "trip",
-        "score": 0.174,
+        "score": 0.18,
         "count": 2
       },
       {
         "word": "life",
-        "score": 0.174,
+        "score": 0.18,
         "count": 2
       },
       {
         "word": "wedding",
-        "score": 0.1101,
+        "score": 0.1139,
         "count": 1
       },
       {
         "word": "though",
-        "score": 0.1101,
+        "score": 0.1139,
         "count": 1
       },
       {
         "word": "seriously",
-        "score": 0.1101,
+        "score": 0.1139,
         "count": 1
       }
     ],
     "2020": [
       {
         "word": "whole",
-        "score": 0.1321,
-        "count": 2
-      },
-      {
-        "word": "out",
-        "score": 0.1321,
+        "score": 0.1405,
         "count": 2
       },
       {
         "word": "hour",
-        "score": 0.1321,
+        "score": 0.1405,
         "count": 2
       },
       {
         "word": "bro",
-        "score": 0.0882,
+        "score": 0.0938,
         "count": 2
       },
       {
         "word": "woke",
-        "score": 0.0661,
+        "score": 0.0703,
         "count": 1
       },
       {
         "word": "tried",
-        "score": 0.0661,
+        "score": 0.0703,
+        "count": 1
+      },
+      {
+        "word": "traffic",
+        "score": 0.0703,
         "count": 1
       }
     ],
     "2021": [
       {
         "word": "pregnant",
-        "score": 0.3476,
+        "score": 0.367,
         "count": 2
       },
       {
         "word": "work",
-        "score": 0.1738,
+        "score": 0.1835,
         "count": 1
       },
       {
         "word": "quiet",
-        "score": 0.1738,
+        "score": 0.1835,
         "count": 1
       },
       {
         "word": "news",
-        "score": 0.1738,
+        "score": 0.1835,
         "count": 1
       },
       {
         "word": "moving",
-        "score": 0.1738,
+        "score": 0.1835,
         "count": 1
       },
       {
         "word": "matches",
-        "score": 0.1738,
+        "score": 0.1835,
         "count": 1
       }
     ],
@@ -1572,32 +1596,32 @@
     "2024": [
       {
         "word": "mid",
-        "score": 0.3145,
+        "score": 0.3476,
         "count": 2
       },
       {
         "word": "love",
-        "score": 0.3145,
+        "score": 0.3476,
         "count": 2
       },
       {
         "word": "valentine's",
-        "score": 0.1573,
+        "score": 0.1738,
         "count": 1
       },
       {
         "word": "untrustworthy",
-        "score": 0.1573,
+        "score": 0.1738,
         "count": 1
       },
       {
         "word": "tonight",
-        "score": 0.1573,
+        "score": 0.1738,
         "count": 1
       },
       {
         "word": "thinking",
-        "score": 0.1573,
+        "score": 0.1738,
         "count": 1
       }
     ],
