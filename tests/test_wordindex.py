@@ -205,8 +205,124 @@ def test_most_reacted_is_none_without_reactions():
     assert build(msgs).profile("bruh")["examples"]["most_reacted"] is None
 
 
+def test_examples_never_show_the_same_message_twice():
+    """A phrase usually has a handful of uses, so a sample drawn over all of
+    them would list the first message again under a second heading."""
+    msgs = [mk("Alice", BASE, "full send"),
+            mk("Bob", BASE + timedelta(minutes=1), "full send",
+               reactions=[("Alice", "\U0001f602")])]
+    ex = build(msgs).profile("full send")["examples"]
+    assert ex["first"]["index"] == 0
+    assert ex["most_reacted"]["index"] == 1
+    assert ex["random"] == []
+
+
+def test_a_single_use_is_shown_once():
+    msgs = [mk("Alice", BASE, "unicorn")]
+    ex = build(msgs).profile("unicorn")["examples"]
+    assert ex["first"]["index"] == 0
+    assert ex["most_reacted"] is None
+    assert ex["random"] == []
+
+
 def test_random_examples_are_stable_for_the_same_word():
     msgs = [mk("Alice", BASE + timedelta(minutes=i), "bruh %d" % i) for i in range(50)]
     index = build(msgs)
     assert (index.profile("bruh")["examples"]["random"]
             == index.profile("bruh")["examples"]["random"])
+
+
+# --------------------------------------------------------------------------- #
+# phrases                                                                      #
+# --------------------------------------------------------------------------- #
+
+def test_a_phrase_only_counts_its_words_side_by_side():
+    msgs = [mk("Alice", BASE, "full send tonight"),
+            mk("Bob", BASE + timedelta(minutes=1), "send the full file")]
+    p = build(msgs).profile("full send")
+    assert p["uses"] == 1 and p["messages"] == 1
+    assert p["word"] == "full send"
+    assert p["is_phrase"] is True
+    assert p["first"]["sender"] == "Alice"
+
+
+def test_a_phrase_whose_words_never_touch_has_no_profile():
+    msgs = [mk("Alice", BASE, "send me the full list"),
+            mk("Bob", BASE + timedelta(minutes=1), "full of send offs")]
+    assert build(msgs).profile("full send") is None
+
+
+def test_a_phrase_with_an_unknown_word_has_no_profile():
+    msgs = [mk("Alice", BASE, "full send")]
+    assert build(msgs).profile("full sendoff") is None
+
+
+def test_a_phrase_repeated_in_one_message_counts_every_time():
+    msgs = [mk("Alice", BASE, "full send full send"),
+            mk("Bob", BASE + timedelta(minutes=1), "full send")]
+    p = build(msgs).profile("full send")
+    assert p["uses"] == 3 and p["messages"] == 2
+
+
+def test_punctuation_between_the_words_does_not_break_a_phrase():
+    msgs = [mk("Alice", BASE, "Full, SEND!!")]
+    assert build(msgs).profile("  full send  ")["uses"] == 1
+
+
+def test_a_phrase_can_be_built_out_of_stopwords():
+    msgs = [mk("Alice", BASE, "in the end it worked"),
+            mk("Bob", BASE + timedelta(minutes=1), "the end")]
+    assert build(msgs).profile("the end")["uses"] == 2
+
+
+def test_a_phrase_of_emoji_is_matched_in_order():
+    msgs = [mk("Alice", BASE, "\U0001f602\U0001f602\U0001f602"),
+            mk("Bob", BASE + timedelta(minutes=1), "\U0001f602 ok \U0001f602")]
+    p = build(msgs).profile("\U0001f602\U0001f602")
+    assert p["uses"] == 2 and p["messages"] == 1
+
+
+def test_a_phrase_mixes_words_and_emoji():
+    msgs = [mk("Alice", BASE, "lol \U0001f602 yes"),
+            mk("Bob", BASE + timedelta(minutes=1), "\U0001f602 lol")]
+    assert build(msgs).profile("lol \U0001f602")["uses"] == 1
+
+
+def test_a_phrase_profile_carries_the_same_blocks_as_a_word():
+    msgs = [mk("Alice", BASE, "full send"),
+            mk("Bob", BASE + timedelta(days=2), "full send bro"),
+            mk("Cara", BASE + timedelta(days=3), "not here")]
+    p = build(msgs).profile("full send")
+    assert [r["member"] for r in p["per_member"]] == ["Alice", "Bob"]
+    assert p["adoption"][1]["days_after"] == 2
+    assert p["adoption"][-1]["member"] == "Cara" and p["adoption"][-1]["first"] is None
+    assert p["examples"]["first"]["index"] == 0
+    assert p["by_year"] == {2020: 2}
+    assert p["variants"] == []
+
+
+def test_a_phrases_own_words_are_not_its_collocations():
+    msgs = [mk("Alice", BASE + timedelta(minutes=i), "full send bro") for i in range(5)]
+    msgs += [mk("Bob", BASE + timedelta(hours=1, minutes=i), "cricket practice")
+             for i in range(20)]
+    words = [c["word"] for c in build(msgs).profile("full send")["collocations"]]
+    assert "bro" in words
+    assert "full" not in words and "send" not in words
+
+
+def test_alone_pct_counts_messages_that_are_only_the_phrase():
+    msgs = [mk("Alice", BASE, "full send"),
+            mk("Alice", BASE + timedelta(minutes=1), "full send"),
+            mk("Bob", BASE + timedelta(minutes=2), "ok full send then")]
+    assert build(msgs).profile("full send")["alone_pct"] == 66.7
+
+
+def test_suggest_completes_the_last_word_and_keeps_the_rest():
+    msgs = [mk("Alice", BASE + timedelta(minutes=i), "full send") for i in range(3)]
+    msgs += [mk("Bob", BASE + timedelta(hours=1), "sensible")]
+    assert build(msgs).suggest("full sen") == ["full send", "full sensible"]
+
+
+def test_suggest_ignores_a_trailing_space():
+    msgs = [mk("Alice", BASE, "full send")]
+    assert build(msgs).suggest("full ") == []

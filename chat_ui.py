@@ -464,7 +464,7 @@ main{max-width:760px;margin:0 auto;padding:0 16px 120px}
 <a href="year_in_review.html" style="color:#5b8ff9;font-size:13px">Years</a>
 </div>
 <section id="wordpanel">
-<input id="wordq" placeholder="Look up a word" autocomplete="off" list="wordsug"/>
+<input id="wordq" placeholder="Look up a word or a phrase" autocomplete="off" list="wordsug"/>
 <datalist id="wordsug"></datalist>
 <label><input type="checkbox" id="wordfold"/> count spellings together</label>
 <div id="wordout"></div>
@@ -601,8 +601,11 @@ if(r.status===404){wout.textContent='Never said in this chat.';return null;}
 if(r.status===503){wout.textContent='Word index disabled (--no-index).';return null;}
 return r.json();}).then(function(p){if(p)renderWord(p);})
 .catch(function(){wout.textContent='Error looking that up.';});}
-wq.addEventListener('input',function(){clearTimeout(wtimer);wtimer=setTimeout(function(){
-fetch('/t/'+SLUG+'/api/suggest?q='+encodeURIComponent(wq.value.trim()))
+/* Spellings are a property of one word, so the toggle has nothing to fold on a
+   phrase. */
+wq.addEventListener('input',function(){wfold.disabled=wq.value.trim().indexOf(' ')>=0;
+clearTimeout(wtimer);wtimer=setTimeout(function(){
+fetch('/t/'+SLUG+'/api/suggest?q='+encodeURIComponent(wq.value))
 .then(function(r){return r.json();}).then(function(d){wsug.textContent='';
 d.words.forEach(function(w){var o=document.createElement('option');o.value=w;wsug.appendChild(o);});
 }).catch(function(){});},150);});

@@ -5,6 +5,10 @@ statistic is computed on demand by walking that matched subset, which for a
 common word is tens of thousands of messages rather than the whole chat. The
 cost of that choice is a walk per query; the benefit is that adding a new
 statistic never means rebuilding or reshaping the index.
+
+A phrase needs no index of its own: the messages that could contain it are the
+ones containing every one of its words, which is an intersection of postings,
+and adjacency is then verified message by message.
 """
 import random
 import re
@@ -22,6 +26,39 @@ RANDOM_EXAMPLES = 3
 def _collapse(word):
     """"bruhhh" and "bruh" both collapse to "bruh"; "brhu" does not."""
     return _RUN_RE.sub(r"\1", word)
+
+
+def _sequence(text):
+    """Words and emoji in the order they were typed.
+
+    tokenize() and split_emojis() each return their own stream, which is all a
+    single token needs but loses the ordering a phrase has to be checked
+    against. Both are re-derived here from the same regex and the same emoji
+    library, over one lowercased string so their offsets agree, and a token is
+    the same thing to a sequence as it is to the index.
+    """
+    lowered = (text or "").lower()
+    items = [(m.start(), m.group()) for m in ac._WORD_RE.finditer(lowered)
+             if any(c.isalpha() for c in m.group())]
+    items += [(e["match_start"], e["emoji"])
+              for e in ac.emoji_lib.emoji_list(lowered)]
+    items.sort()
+    return [token for _, token in items]
+
+
+def _count_run(seq, pattern):
+    """Occurrences of `pattern` as consecutive tokens of `seq`, overlaps included."""
+    n = len(pattern)
+    if n == 1:
+        return seq.count(pattern[0])
+    if n > len(seq):
+        return 0
+    first = pattern[0]
+    hits = 0
+    for i in range(len(seq) - n + 1):
+        if seq[i] == first and tuple(seq[i:i + n]) == pattern:
+            hits += 1
+    return hits
 
 
 class WordIndex:
@@ -62,7 +99,13 @@ class WordIndex:
     # ----------------------------------------------------------------- #
 
     def profile(self, query, fold_variants=False):
-        word = (query or "").strip().lower()
+        """A word or a phrase, told apart by how many tokens the query holds."""
+        terms = _sequence(query)
+        if not terms:
+            return None
+        if len(terms) > 1:
+            return self._phrase_profile(terms)
+        word = terms[0]
         if word not in self.postings:
             return None
         words = [word]
@@ -72,9 +115,38 @@ class WordIndex:
             idxs = list(self.postings[word])
         else:
             idxs = sorted({i for w in words for i in self.postings[w]})
-        result = self._profile_from(word, idxs, words)
+        result = self._profile_from(word, idxs, [(w,) for w in words])
         result["variants"] = self.variants_of(word)
         result["folded"] = bool(fold_variants)
+        return result
+
+    def _phrase_profile(self, terms):
+        """Messages holding every word, then those holding them side by side."""
+        distinct = set(terms)
+        if any(term not in self.postings for term in distinct):
+            return None
+        # Narrowed from the rarest word outward, so the verification pass that
+        # follows reads a few hundred messages rather than every message the
+        # commonest word in the phrase appears in.
+        rarest_first = sorted(distinct, key=lambda t: len(self.postings[t]))
+        candidates = set(self.postings[rarest_first[0]])
+        for term in rarest_first[1:]:
+            candidates &= set(self.postings[term])
+            if not candidates:
+                return None
+        pattern = tuple(terms)
+        # Verification already reads each candidate; the sequences of the ones
+        # that survive are what the profile walk would otherwise rebuild.
+        seqs = {}
+        for i in sorted(candidates):
+            seq = _sequence(ac._words_only(self.msgs[i]["content"]))
+            if _count_run(seq, pattern):
+                seqs[i] = seq
+        if not seqs:
+            return None
+        result = self._profile_from(" ".join(terms), sorted(seqs), [pattern], seqs)
+        result["variants"] = []
+        result["folded"] = False
         return result
 
     def variants_of(self, word):
@@ -85,20 +157,36 @@ class WordIndex:
         return out
 
     def suggest(self, prefix, limit=10):
-        p = (prefix or "").strip().lower()
-        if not p:
+        """Completions of the last word, keeping any words typed before it.
+
+        Only the last word is completed: whether the finished phrase was ever
+        said is a question the profile answers, and answering it here would
+        mean resolving a phrase on every keystroke.
+        """
+        # Only the left side is stripped: a trailing space means the next word
+        # has not been typed yet, and there is nothing to complete.
+        text = (prefix or "").lower().lstrip()
+        head, _, tail = text.rpartition(" ")
+        if not tail:
             return []
-        hits = [w for w in self.postings if w.startswith(p)]
+        hits = [w for w in self.postings if w.startswith(tail)]
         hits.sort(key=lambda w: (-self.totals[w], w))
-        return hits[:limit]
+        hits = hits[:limit]
+        return [head + " " + w for w in hits] if head else hits
 
     # ----------------------------------------------------------------- #
     # the profile                                                        #
     # ----------------------------------------------------------------- #
 
-    def _profile_from(self, word, idxs, words):
+    def _profile_from(self, label, idxs, patterns, seqs=None):
+        """Every statistic, in one pass over the messages that matched.
+
+        `patterns` is what counts as a use: one token sequence for a phrase,
+        one per spelling when variants are folded together. `seqs` lets a
+        caller that has already read those messages hand over what it read.
+        """
         matched = [self.msgs[i] for i in idxs]
-        wordset = set(words)
+        wordset = {token for pattern in patterns for token in pattern}
         per_member_uses = Counter()
         per_member_msgs = Counter()
         by_year = Counter()
@@ -108,10 +196,9 @@ class WordIndex:
         alone = 0
         first_use = {}
         for pos, m in enumerate(matched):
-            body = ac._words_only(m["content"])
-            tokens = ac.tokenize(body)
-            emojis = ac.split_emojis(body)
-            uses = sum(tokens.count(w) + emojis.count(w) for w in words)
+            seq = (seqs[idxs[pos]] if seqs is not None
+                   else _sequence(ac._words_only(m["content"])))
+            uses = sum(_count_run(seq, pattern) for pattern in patterns)
             sender = m["sender"]
             per_member_uses[sender] += uses
             per_member_msgs[sender] += 1
@@ -119,7 +206,7 @@ class WordIndex:
             by_year[dt.year] += uses
             by_month[dt.strftime("%Y-%m")] += uses
             by_hour[dt.hour] += uses
-            present = set(tokens) | set(emojis)
+            present = set(seq)
             if present and present <= wordset:
                 alone += 1
             for other in present - wordset:
@@ -138,8 +225,10 @@ class WordIndex:
             })
 
         return {
-            "word": word,
-            "uses": sum(self.totals[w] for w in words),
+            "word": label,
+            "terms": list(patterns[0]) if len(patterns) == 1 else [label],
+            "is_phrase": len(patterns[0]) > 1,
+            "uses": sum(per_member_uses.values()),
             "messages": len(idxs),
             "per_member": per_member,
             "by_year": dict(by_year),
@@ -152,7 +241,7 @@ class WordIndex:
             "reaction_pull": self._reaction_pull(matched),
             "collocations": self._collocations(neighbours, len(matched)),
             "alone_pct": round(100 * alone / len(matched), 1),
-            "examples": self._examples(word, matched, idxs),
+            "examples": self._examples(label, matched, idxs),
         }
 
     def _adoption(self, first_use, patient_zero):
@@ -192,15 +281,22 @@ class WordIndex:
         out.sort(key=lambda c: (-c["ratio"], -c["messages"], c["word"]))
         return out[:MAX_COLLOCATIONS]
 
-    def _examples(self, word, matched, idxs):
+    def _examples(self, label, matched, idxs):
         best = max(range(len(matched)), key=lambda p: len(matched[p]["reactions"]))
-        # Seeded on the word, so reloading a profile does not reshuffle it.
-        picker = random.Random(word)
-        sample = picker.sample(range(len(matched)), min(RANDOM_EXAMPLES, len(matched)))
+        most_reacted = None
+        taken = {0}
+        if matched[best]["reactions"]:
+            most_reacted = self._cite(matched[best], idxs[best])
+            taken.add(best)
+        # Drawn from what the fixed picks left over: a phrase said twice would
+        # otherwise show its two messages four times.
+        rest = [p for p in range(len(matched)) if p not in taken]
+        # Seeded on the query, so reloading a profile does not reshuffle it.
+        picker = random.Random(label)
+        sample = picker.sample(rest, min(RANDOM_EXAMPLES, len(rest)))
         return {
             "first": self._cite(matched[0], idxs[0]),
-            "most_reacted": (self._cite(matched[best], idxs[best])
-                             if matched[best]["reactions"] else None),
+            "most_reacted": most_reacted,
             "random": [self._cite(matched[p], idxs[p]) for p in sorted(sample)],
         }
 

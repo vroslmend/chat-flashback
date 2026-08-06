@@ -50,9 +50,9 @@ Runs locally. Your data is not uploaded anywhere.
   sortable tables.
 - Local chat reader (`--serve`). Browse the chat in a Messenger-style web UI, with
   "on this day" nostalgia, random memories, regex search, and a theme toggle.
-- Word explorer in the reader. Look up any word and get who says it, how often per
-  1,000 messages, when it started, who picked it up from whom, the words it keeps
-  company with, and real messages you can jump straight to.
+- Word explorer in the reader. Look up any word, phrase or emoji and get who says
+  it, how often per 1,000 messages, when it started, who picked it up from whom,
+  the words it keeps company with, and real messages you can jump straight to.
 - `--anonymize`. Replaces names with Person A, Person B in all output.
 - `--tz`, `--config`, `--progress`, and `--incremental` for timezones, config files,
   progress output, and skipping unchanged threads.
@@ -217,12 +217,20 @@ differ only in held-down letters are listed separately, and "count spellings
 together" folds them into the totals. Autocomplete suggests words by how often
 they are used.
 
+Type more than one word and it becomes a phrase, counted only where those words
+sit side by side — `full send` ignores "send me the full list". Emoji are indexed
+as words, so `😂` works the same way, and so does `😂😂` or `lol 😂`. Punctuation
+and capitals are ignored, and a phrase may be built entirely out of stopwords
+(`the end` is a fair question even though `the` is not).
+
 The index is built once at startup and lives in memory. On a 1.79M-message chat
 it takes about 30 seconds and peaks near 180 MB while building, for 140,755
 distinct words. A lookup then takes milliseconds for an ordinary word, and up to
 about 3 seconds for one of the most common words in the chat, since every
-statistic is computed on demand over the messages that matched. Pass
-`--no-index` to skip the build if you only want to read.
+statistic is computed on demand over the messages that matched. Phrases need no
+index of their own — the candidate messages are the ones containing every word,
+so `in the` came back in 1.0 s and `what the hell` in 0.04 s on the same chat.
+Pass `--no-index` to skip the build if you only want to read.
 
 Media files are served from the export folder only; paths are resolved inside the
 thread directory so nothing outside it can be read, and files are streamed with

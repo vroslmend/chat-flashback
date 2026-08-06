@@ -106,6 +106,16 @@ def test_suggest_endpoint_completes_a_prefix(tmp_path):
     assert "bro" in json.loads(get("/t/saturday_squad/api/suggest?q=br"))["words"]
 
 
+def test_word_endpoint_resolves_a_phrase(tmp_path):
+    from urllib.parse import quote
+    _, get = _serve(tmp_path)
+    body = json.loads(get("/t/saturday_squad/api/word?q=" + quote("shawarma spot")))
+    assert body["word"] == "shawarma spot"
+    assert body["is_phrase"] is True
+    assert body["uses"] == 1
+    assert "shawarma" in body["examples"]["first"]["content"]
+
+
 def test_viewer_ships_the_word_panel(tmp_path):
     _, get = _serve(tmp_path)
     page = get("/t/saturday_squad/")
