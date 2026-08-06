@@ -23,7 +23,7 @@ Runs locally. Your data is not uploaded anywhere.
 - Activity heatmap. GitHub-style calendar grid plus pace trends (messages/day, calls, media).
 - Pair dynamics. Heatmaps of who replies to whom and who reacts to whose messages.
 - Hourly radar profiles. Each member's 24-hour activity shape.
-- Word clouds. Overall and per-member, generated with `wordcloud`.
+- Word clouds. Overall and for the six busiest members, generated with `wordcloud`.
 - Monologues and unsent messages. Longest solo runs ("could've been an email") and `is_unsent`.
 - Emoji report. Emoji counts per member and a timeline of favorite emojis over the years.
 - Question dynamics. Who asks questions, who answers, who gets left on read, answer speed.
@@ -38,8 +38,16 @@ Runs locally. Your data is not uploaded anywhere.
   and `is_taken_down`, and de-duplicates messages that appear in multiple files.
 - `--check`. Validate an export before analyzing: unknown message types/keys, empty
   messages, media files missing on disk, duplicate messages, and gaps between files.
-- Self-contained `report.html` with all charts embedded (share one file). Sticky nav,
-  dark/light toggle, and filterable, sortable tables.
+- Copy-paste floods handled. Vocabulary counts each word or emoji at most three
+  times per message, so one pasted wall of the same word cannot decide the top
+  words, the topics of a year, or somebody's signature word. Volume stats still
+  count every keystroke, and the totals report how many floods there were.
+- Bots flagged. Members that are obviously software (`Meta AI`) are labelled
+  `(bot)` and kept out of the human awards: fastest replier, best vibes, and the
+  weirdest-statements reel.
+- Self-contained `report.html` with every table and chart from `summary.md`
+  embedded (share one file). Sticky nav, dark/light toggle, and filterable,
+  sortable tables.
 - Local chat reader (`--serve`). Browse the chat in a Messenger-style web UI, with
   "on this day" nostalgia, random memories, regex search, and a theme toggle.
 - `--anonymize`. Replaces names with Person A, Person B in all output.
@@ -85,7 +93,7 @@ Options:
 | `--track-file` | File with tracked terms, one per line (`#` comments and blank lines ignored) |
 | `--stopwords-file` | Extra stopwords to ignore in word stats, one per line (the built-in list is English only) |
 | `--year` | Analyze only one year, e.g. `--year 2017` |
-| `--top` | Number of entries in leaderboards (default: 10) |
+| `--top` | Number of entries in leaderboards and charts (default: 10) |
 | `--json` | Also write `summary.json` with the report data as structured JSON |
 | `--serve` | Start the local chat reader web UI instead of writing reports |
 | `--port` | Port for `--serve` (default: 8080) |
@@ -129,7 +137,9 @@ Latin script:
 python analyze_chat.py --input data --stopwords-file stopwords/hinglish.txt
 ```
 
-Any file works: one word per line, `#` for comments.
+Any file works: one word per line, `#` for comments. Chat spelling is not
+standard, so a word usually needs several entries (`mein`, `mei`, `mai`) before
+it stops showing up in the results.
 
 ### Very large chats
 

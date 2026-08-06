@@ -11,7 +11,6 @@
 hai
 hain
 hy
-hai
 he
 tha
 thi
@@ -88,7 +87,6 @@ yeh
 ye
 jo
 kya
-kia
 kaun
 kahan
 kab
@@ -163,3 +161,18 @@ tak
 wala
 wali
 wale
+
+# Spellings that a real 1.8M-message chat used more than any of the above, and
+# that the list above misses because it only had the textbook form.
+mai
+sai
+kai
+ko
+per
+pr
+krke
+karke
+kro
+hoo
+hei
+nhin
