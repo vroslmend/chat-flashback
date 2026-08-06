@@ -50,6 +50,9 @@ Runs locally. Your data is not uploaded anywhere.
   sortable tables.
 - Local chat reader (`--serve`). Browse the chat in a Messenger-style web UI, with
   "on this day" nostalgia, random memories, regex search, and a theme toggle.
+- Word explorer in the reader. Look up any word and get who says it, how often per
+  1,000 messages, when it started, who picked it up from whom, the words it keeps
+  company with, and real messages you can jump straight to.
 - `--anonymize`. Replaces names with Person A, Person B in all output.
 - `--tz`, `--config`, `--progress`, and `--incremental` for timezones, config files,
   progress output, and skipping unchanged threads.
@@ -98,6 +101,7 @@ Options:
 | `--json` | Also write `summary.json` with the report data as structured JSON |
 | `--serve` | Start the local chat reader web UI instead of writing reports |
 | `--port` | Port for `--serve` (default: 8080) |
+| `--no-index` | Skip the word-search index when serving. Starts faster; the word explorer is unavailable |
 | `--tz` | Timezone for analysis, e.g. `+03:00` or `America/New_York` (Messenger timestamps are UTC; default is your system timezone) |
 | `--config` | JSON config file with any of the options above |
 | `--skip` | Skip analyses: `jokes`, `sentiment`, `wordcloud`, `topics` (comma-separated) |
@@ -194,7 +198,31 @@ opens a Messenger-style reader:
 - A jump-to-date control, an "On this day" view across the years, and a random-memory
   "Surprise me" button
 - A light/dark theme toggle (remembered between visits)
+- The word explorer, behind the "Words" button
 - Links to the full report and the year-in-review pages
+
+### Word explorer
+
+Type a word into the panel behind the reader's "Words" button and it comes back
+with the whole life of that word in the chat: total uses and how many messages
+they land in, a per-member table with a per-1,000-messages rate so a quiet member
+who says it constantly is not buried under a chatty one, the year it peaked, how
+often it is sent on its own, whether it pulls more reactions than the chat's
+average, who said it first and how many days everyone else took to pick it up,
+the words that sit beside it more often than chance predicts, and example
+messages with a button that jumps the feed to that moment.
+
+Matching is exact: `bruh` does not silently include `bruhh`. Other spellings that
+differ only in held-down letters are listed separately, and "count spellings
+together" folds them into the totals. Autocomplete suggests words by how often
+they are used.
+
+The index is built once at startup and lives in memory. On a 1.79M-message chat
+it takes about 30 seconds and peaks near 180 MB while building, for 140,755
+distinct words. A lookup then takes milliseconds for an ordinary word, and up to
+about 3 seconds for one of the most common words in the chat, since every
+statistic is computed on demand over the messages that matched. Pass
+`--no-index` to skip the build if you only want to read.
 
 Media files are served from the export folder only; paths are resolved inside the
 thread directory so nothing outside it can be read, and files are streamed with
