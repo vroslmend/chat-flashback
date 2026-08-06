@@ -10,7 +10,6 @@ import json
 import mimetypes
 import random
 import re
-from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -40,9 +39,15 @@ class ThreadIndex:
             self.colors[name] = ac.PALETTE[i % len(ac.PALETTE)]
         self.all_pairs = []
         self.member_pairs = {}
+        # (month, day) -> indices, so "on this day" can group by the same local
+        # calendar date the rest of the report uses. Rebuilding the day window
+        # from timestamps would apply the system timezone instead of --tz.
+        self.by_monthday = {}
         for i, m in enumerate(msgs):
             self.all_pairs.append((m["ts_ms"], i))
             self.member_pairs.setdefault(m["sender"], []).append((m["ts_ms"], i))
+            dt = m["dt"]
+            self.by_monthday.setdefault((dt.month, dt.day), []).append(i)
         self._sent_cache = {}
 
     def to_json(self, idx):
@@ -129,37 +134,32 @@ class ThreadIndex:
                 pattern = re.compile(q, re.IGNORECASE)
             except re.error:
                 pattern = None
-        matches = []
-        for m in self.msgs:
+        # Keep indices, never the message dicts: recovering an index later with
+        # msgs.index() is a linear scan of dict comparisons per hit, which turns
+        # a search over a long chat into seconds of quadratic work.
+        hits = []
+        total = 0
+        for i, m in enumerate(self.msgs):
             if member and m["sender"] != member:
                 continue
             content = m["content"] or ""
             if pattern is not None:
-                hit = pattern.search(content) is not None
+                found = pattern.search(content) is not None
             else:
-                hit = ql in content.lower()
-            if hit:
-                matches.append(m)
-                if len(matches) >= limit:
-                    break
-        return {"messages": [self._to_json_msg(m) for m in matches],
+                found = ql in content.lower()
+            if found:
+                total += 1
+                if len(hits) < limit:
+                    hits.append(i)
+        return {"messages": [self.to_json(i) for i in hits],
                 "next_before": None, "next_after": None,
-                "search": True, "total_matches": len(matches)}
+                "search": True, "total_matches": total,
+                "shown": len(hits), "truncated": total > len(hits)}
 
     def day(self, month, day, limit=_PAGE_SIZE):
-        years = sorted({m["dt"].year for m in self.msgs})
-        out = []
-        for y in years:
-            try:
-                start = datetime(y, month, day, 0, 0).timestamp() * 1000
-                end = datetime(y, month, day, 23, 59, 59, 999000).timestamp() * 1000
-            except ValueError:
-                continue
-            lo = bisect.bisect_left(self.all_pairs, (start, -1))
-            hi = bisect.bisect_right(self.all_pairs, (end, 10 ** 15))
-            for _, i in self.all_pairs[lo:hi]:
-                out.append(i)
-        out.sort(key=lambda i: self.msgs[i]["ts_ms"])
+        out = sorted(self.by_monthday.get((month, day), []),
+                     key=lambda i: self.msgs[i]["ts_ms"])
+        years = sorted({self.msgs[i]["dt"].year for i in out})
         return {"messages": [self.to_json(i) for i in out[:limit]],
                 "total": len(out), "years": years}
 
@@ -170,9 +170,6 @@ class ThreadIndex:
         pool = reacted or long_text or list(range(len(self.msgs)))
         idx = random.choice(pool)
         return {"message": self.to_json(idx)}
-
-    def _to_json_msg(self, m):
-        return self.to_json(self.msgs.index(m))
 
     def resolve_media(self, rel):
         base = (self.thread_dir / rel).resolve()
@@ -209,8 +206,58 @@ def make_handler(threads, output_dir):
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
             self.end_headers()
             self.wfile.write(body)
+
+        def _send_media(self, path, ctype):
+            """Stream a media file, honouring a single Range request.
+
+            Streamed in chunks rather than read whole so a large video does not
+            have to fit in memory, and Range is answered so players can seek.
+            Anything that is not an image, video or audio is forced to download
+            instead of rendering: an export can contain .html or .svg
+            attachments, which would otherwise run as script on this origin.
+            """
+            size = path.stat().st_size
+            start, end = 0, size - 1
+            partial = False
+            rng = self.headers.get("Range", "")
+            m = re.match(r"^bytes=(\d*)-(\d*)$", rng.strip()) if rng else None
+            if m and size:
+                lo, hi = m.group(1), m.group(2)
+                if lo:
+                    start = min(int(lo), size - 1)
+                    end = min(int(hi), size - 1) if hi else size - 1
+                elif hi:                      # suffix range: last N bytes
+                    start = max(0, size - int(hi))
+                if start <= end:
+                    partial = True
+                else:
+                    start, end = 0, size - 1
+            length = end - start + 1
+            inline = ctype.split("/")[0] in ("image", "video", "audio")
+            self.send_response(206 if partial else 200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(length))
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            if not inline:
+                self.send_header("Content-Disposition",
+                                 f'attachment; filename="{path.name}"')
+            if partial:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            self.end_headers()
+            with path.open("rb") as fh:
+                fh.seek(start)
+                remaining = length
+                while remaining > 0:
+                    chunk = fh.read(min(64 * 1024, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
 
         def _json(self, obj, code=200):
             self._send(code, json.dumps(obj, ensure_ascii=False), "application/json; charset=utf-8")
@@ -231,8 +278,11 @@ def make_handler(threads, output_dir):
                     return self._send(404, "not found")
                 sub = [s for s in rest[2:] if s]
                 if not sub:
+                    # The title comes from the export, so it is untrusted text:
+                    # escape it. The slug is safe by construction (ac._slug
+                    # keeps only alphanumerics and underscores).
                     return self._send(200, viewer_html().replace("__SLUG__", slug)
-                                      .replace("__TITLE__", thread.title))
+                                      .replace("__TITLE__", html(thread.title)))
                 if sub[0] == "api":
                     if len(sub) >= 2 and sub[1] == "messages":
                         return self._messages(thread, query)
@@ -262,7 +312,7 @@ def make_handler(threads, output_dir):
                     if media is None:
                         return self._send(404, "not found")
                     ctype = mimetypes.guess_type(media.name)[0] or "application/octet-stream"
-                    return self._send(200, media.read_bytes(), ctype)
+                    return self._send_media(media, ctype)
             return self._send(404, "not found")
 
         def _landing(self):
@@ -381,7 +431,7 @@ main{max-width:760px;margin:0 auto;padding:0 16px 120px}
 <main id="feed"></main>
 <div class="loader" id="loader">Loading...</div>
 <script>
-var SLUG='__SLUG__', TITLE='__TITLE__';
+var SLUG='__SLUG__';
 var feed=document.getElementById('feed'), loader=document.getElementById('loader');
 var qEl=document.getElementById('q'), memberEl=document.getElementById('member');
 var orderEl=document.getElementById('order'), jumpEl=document.getElementById('jump');
@@ -434,18 +484,24 @@ return u;}
 function loadMore(){if(state.loading||state.done)return;state.loading=true;loader.textContent='Loading...';
 fetch(apiURL()).then(function(r){return r.json();}).then(function(data){
 state.loading=false;
-if(state.searching){feed.innerHTML='';lastDay='';countEl.textContent=data.total_matches+' match(es)';appendMsgs(data.messages);if(data.total_matches<1){feed.innerHTML='<div class="empty">No matches.</div>';}state.done=true;loader.style.display='none';return;}
+if(state.searching){feed.innerHTML='';lastDay='';
+countEl.textContent=data.truncated?('showing '+data.shown+' of '+data.total_matches+' match(es)'):(data.total_matches+' match(es)');
+appendMsgs(data.messages);if(data.total_matches<1){feed.innerHTML='<div class="empty">No matches.</div>';}state.done=true;loader.style.display='none';return;}
 appendMsgs(data.messages);
 if(data.next_before!=null){state.before=data.next_before;}else if(data.next_after!=null){state.after=data.next_after;}else{state.done=true;}
 countEl.textContent=feed.querySelectorAll('.msg').length+' / '+THREAD.total.toLocaleString()+' messages';
 if(state.done){loader.textContent='End of history.';}}).catch(function(){state.loading=false;loader.textContent='Error loading.';});}
-function reset(mode){state.loading=false;state.done=false;state.before=null;state.after=null;state.mode='feed';feed.innerHTML='';lastDay='';loader.style.display='';if(mode==='search'){state.searching=true;}else{state.searching=false;}loadMore();}
+function reset(mode){state.loading=false;state.done=false;state.before=null;state.after=null;state.mode='feed';feed.innerHTML='';lastDay='';loader.style.display='';if(mode==='search'){state.searching=true;}else{state.searching=false;
+/* Oldest-first walks forward from the start of history; leaving both cursors
+   null always paginates backwards from the newest message. */
+if(orderEl.value==='oldest')state.after=0;}
+loadMore();}
 function onThisDay(dateStr){state.mode='day';state.done=false;state.loading=false;feed.innerHTML='';lastDay='';loader.style.display='';
 fetch('/t/'+SLUG+'/api/day?date='+encodeURIComponent(dateStr)).then(function(r){return r.json();}).then(function(data){
 loader.style.display='none';state.done=true;
 var byYear={};data.messages.forEach(function(m){var y=new Date(m.ts).getFullYear();(byYear[y]=byYear[y]||[]).push(m);});
 var years=Object.keys(byYear).sort();
-countEl.textContent=data.total+' message(s) on '+dateStr.slice(0,7)+dateStr.slice(5)+' across '+(years.length||0)+' year(s)';
+countEl.textContent=data.total+' message(s) on '+dateStr.slice(5)+' across '+(years.length||0)+' year(s)';
 if(years.length===0){feed.innerHTML='<div class="empty">Nothing happened on this day.</div>';return;}
 years.forEach(function(y){var d=document.createElement('div');d.className='day';d.textContent=y+' ('+byYear[y].length+' message'+(byYear[y].length===1?'':'s')+')';feed.appendChild(d);byYear[y].forEach(function(m){feed.insertAdjacentHTML('beforeend',msgHTML(m));});});
 }).catch(function(){loader.style.display='none';state.done=true;feed.innerHTML='<div class="empty">Error loading.</div>';});}
@@ -473,7 +529,7 @@ if(localStorage.getItem('cf-theme')==='light')applyTheme('light');
 fetch('/t/'+SLUG+'/api/thread').then(function(r){return r.json();}).then(function(t){
 THREAD=t;
 memberEl.innerHTML='<option value="">Everyone</option>'+t.members.map(function(m){return '<option value="'+esc(m.name)+'">'+esc(m.name)+' ('+m.count.toLocaleString()+')</option>';}).join('');
-document.title=TITLE+' | chat-flashback';
+document.title=t.title+' | chat-flashback';
 loadMore();});
 </script></body></html>"""
 

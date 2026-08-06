@@ -267,16 +267,24 @@ def anonymize_map(msgs):
 
 
 def apply_anonymization(msgs, mapping):
-    patterns = [(re.compile(r"\b" + re.escape(n) + r"\b", re.IGNORECASE), label)
-                for n, label in mapping.items()]
+    """Replace every member name in senders, reactors and message text.
+
+    Names are matched longest-first in a single pass: replacing them one at a
+    time in count order lets a short name rewrite part of a longer one that
+    contains it ("Ann" inside "Ann Smith" would leave the surname behind), and
+    a single pass means a label can never be rewritten by a later name.
+    """
+    names = sorted(mapping, key=len, reverse=True)
+    combined = (re.compile(r"\b(" + "|".join(re.escape(n) for n in names) + r")\b",
+                           re.IGNORECASE) if names else None)
+    lookup = {n.lower(): label for n, label in mapping.items()}
     for m in msgs:
         m["sender"] = mapping.get(m["sender"], "Person ?")
         m["reactions"] = [(mapping.get(a, "Person ?"), r) for a, r in m["reactions"]]
         content = m["content"]
-        if content:
-            for pattern, label in patterns:
-                content = pattern.sub(label, content)
-            m["content"] = content
+        if content and combined is not None:
+            m["content"] = combined.sub(
+                lambda mo: lookup.get(mo.group(1).lower(), "Person ?"), content)
     return msgs
 
 
@@ -284,12 +292,42 @@ def apply_anonymization(msgs, mapping):
 # Core stats                                                                  #
 # --------------------------------------------------------------------------- #
 
+_WORD_RE = re.compile(r"[A-Za-z0-9']+")
+
+
 def tokenize(text):
-    return re.findall(r"[A-Za-z']+", (text or "").lower())
+    """Split into words, keeping digits that sit inside a word.
+
+    "covid19" and "b2b" stay whole; bare numbers like "2020" are dropped, since
+    they are dates and counts rather than vocabulary.
+    """
+    return [w for w in _WORD_RE.findall((text or "").lower())
+            if any(c.isalpha() for c in w)]
 
 
 def split_emojis(text):
     return [c for c in (text or "") if emoji_lib.is_emoji(c)]
+
+
+def _median(sorted_values):
+    n = len(sorted_values)
+    if not n:
+        return None
+    if n % 2:
+        return sorted_values[n // 2]
+    return (sorted_values[n // 2 - 1] + sorted_values[n // 2]) / 2
+
+
+def _sum_counters(counters):
+    """Add Counters together.
+
+    A dict comprehension over several Counters silently keeps only the last
+    value for a repeated key, so totals have to be accumulated.
+    """
+    total = Counter()
+    for c in counters:
+        total.update(c)
+    return total
 
 
 def longest_streak(dates):
@@ -449,35 +487,62 @@ def reaction_stats(msgs, top=10):
 
 
 def response_speed(msgs, top=10):
+    """Reply latency per member, plus how often each member's turn went unanswered.
+
+    Ghosting is measured per *turn* (a run of consecutive messages by one
+    member), not per message: only the end of a run can be replied to, so
+    dividing by every message sent would count messages that were never
+    candidates for a reply. The final run of the export is ignored, since
+    nobody had the chance to answer it.
+    """
     reply_seconds = defaultdict(list)
     replies_received = Counter()
     messages_sent = Counter(m["sender"] for m in msgs)
+    turns = Counter()
     ignored = Counter()
-    for prev, cur in zip(msgs, msgs[1:]):
-        if cur["sender"] == prev["sender"]:
-            continue
-        gap = (cur["ts_ms"] - prev["ts_ms"]) / 1000
-        if 0 < gap <= REPLY_WINDOW_SECONDS:
-            reply_seconds[cur["sender"]].append(gap)
-            replies_received[prev["sender"]] += 1
-        else:
-            ignored[prev["sender"]] += 1
+    i, n = 0, len(msgs)
+    while i < n:
+        sender = msgs[i]["sender"]
+        j = i + 1
+        while j < n and msgs[j]["sender"] == sender:
+            j += 1
+        if j < n:
+            turns[sender] += 1
+            gap = (msgs[j]["ts_ms"] - msgs[j - 1]["ts_ms"]) / 1000
+            if 0 <= gap <= REPLY_WINDOW_SECONDS:
+                reply_seconds[msgs[j]["sender"]].append(gap)
+                replies_received[sender] += 1
+            else:
+                ignored[sender] += 1
+        i = j
     table = []
-    for member, gaps in reply_seconds.items():
-        gaps.sort()
-        n = len(gaps)
-        med = gaps[n // 2] if n % 2 else (gaps[n // 2 - 1] + gaps[n // 2]) / 2
+    for member in sorted(messages_sent):
+        gaps = sorted(reply_seconds.get(member, []))
+        replies = len(gaps)
+        med = _median(gaps)
         quick = sum(1 for g in gaps if g <= 300)
+        member_turns = turns[member]
         table.append({
             "member": member,
-            "replies": n,
+            "replies": replies,
             "median_s": med,
-            "median_m": round(med / 60, 1),
-            "fast5_pct": round(100 * quick / n, 1),
-            "ghost_pct": round(100 * ignored[member] / messages_sent[member], 1) if messages_sent[member] else 0,
+            "median_m": round(med / 60, 1) if med is not None else None,
+            "fast5_pct": round(100 * quick / replies, 1) if replies else None,
+            "turns": member_turns,
+            "ghost_pct": (round(100 * ignored[member] / member_turns, 1)
+                          if member_turns else None),
         })
-    table.sort(key=lambda r: r["median_s"])
+    # Fastest first; members who never replied have no median and sort last.
+    table.sort(key=lambda r: (r["median_s"] is None, r["median_s"] or 0))
     return {"table": table, "replies_received": replies_received}
+
+
+def _fastest_replier(speed):
+    """First row of the response-speed table that actually has a median."""
+    for row in (speed or {}).get("table") or []:
+        if row["median_s"] is not None:
+            return row
+    return None
 
 
 def swear_stats(msgs):
@@ -891,11 +956,11 @@ def question_stats(msgs):
         while j < n and msgs[j]["sender"] == sender:
             j += 1
         if j < n:
+            # Gaps shrink as k approaches j, so an early message being out of
+            # the window says nothing about the later ones: skip, do not stop.
             for k in range(i, j):
                 if (msgs[j]["ts_ms"] - msgs[k]["ts_ms"]) / 1000 <= REPLY_WINDOW_SECONDS:
                     next_other[k] = j
-                else:
-                    break
         i = j
 
     asked = Counter()
@@ -920,13 +985,8 @@ def question_stats(msgs):
     table = []
     for member in set(asked) | set(responses):
         a = asked[member]
-        gaps = answer_time[member]
-        gaps.sort()
-        gl = len(gaps)
-        if gl:
-            med = gaps[gl // 2] if gl % 2 else (gaps[gl // 2 - 1] + gaps[gl // 2]) / 2
-        else:
-            med = None
+        gaps = sorted(answer_time[member])
+        med = _median(gaps)
         table.append({
             "member": member,
             "asked": a,
@@ -942,20 +1002,24 @@ def question_stats(msgs):
 
 
 def topic_words(msgs, top=6):
+    """Words that characterise each year, scored with tf-idf over years.
+
+    Each *year* is one document, so the document frequency of a word is the
+    number of years it shows up in. Counting messages instead makes the idf
+    term go negative for anything common, which inverts the ranking and
+    surfaces one-off typos as a year's topics.
+    """
     by_year = defaultdict(Counter)
     year_totals = Counter()
-    year_docs = defaultdict(int)
+    years_with_word = defaultdict(set)
     for m in msgs:
         year = m["dt"].year
-        seen = set()
         for w in tokenize(m["content"]):
             if w in STOPWORDS or len(w) <= 2:
                 continue
             by_year[year][w] += 1
             year_totals[year] += 1
-            seen.add(w)
-        for w in seen:
-            year_docs[w] += 1
+            years_with_word[w].add(year)
     n_years = max(1, len(by_year))
     result = {}
     for year, counter in sorted(by_year.items()):
@@ -963,7 +1027,8 @@ def topic_words(msgs, top=6):
         scored = []
         for w, c in counter.items():
             tf = c / tf_total
-            idf = math.log((1 + n_years) / (1 + year_docs[w])) + 1
+            # 1.0 for a word used every year, rising as it narrows to fewer.
+            idf = math.log(n_years / len(years_with_word[w])) + 1.0
             scored.append((tf * idf, w, c))
         scored.sort(reverse=True)
         result[year] = [{"word": w, "score": round(s, 4), "count": c}
@@ -972,17 +1037,47 @@ def topic_words(msgs, top=6):
 
 
 def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12):
+    """Repeated phrases said by enough people over enough years to be a joke.
+
+    Done in two passes to keep memory bounded on long chats. Tracking every
+    2-, 3- and 4-gram with its member/year sets and an example string costs
+    roughly 17 kB per message, which is gigabytes for a decade of group chat.
+
+    Pass one counts bigrams alone (ints, no payload). A phrase can never occur
+    more often than any bigram inside it, so a 3- or 4-gram can only reach
+    min_count if all of its bigrams already did. Pass two therefore builds the
+    full records only for phrases that survive that test, which is exact -- no
+    qualifying phrase can be pruned -- while discarding the long tail of
+    said-once phrases that dominates the count.
+    """
+    def phrase_words(m):
+        return [w for w in tokenize(m["content"]) if w not in STOPWORDS and len(w) > 2]
+
     def ngrams(words, n):
         return [" ".join(words[i:i + n]) for i in range(max(0, len(words) - n + 1))]
 
+    bigram_counts = Counter()
+    for m in msgs:
+        words = phrase_words(m)
+        if len(words) >= 2:
+            bigram_counts.update(set(ngrams(words, 2)))
+    frequent = {g for g, c in bigram_counts.items() if c >= min_count}
+    bigram_counts.clear()
+    if not frequent:
+        return {"jokes": [], "total_candidates": 0}
+
     phrase = defaultdict(lambda: {"count": 0, "members": set(), "years": set(), "example": None})
     for m in msgs:
-        words = [w for w in tokenize(m["content"]) if w not in STOPWORDS and len(w) > 2]
+        words = phrase_words(m)
         if len(words) < 2:
             continue
         found = set()
         for n in (2, 3, 4):
-            for g in ngrams(words, n):
+            for i in range(max(0, len(words) - n + 1)):
+                parts = words[i:i + n]
+                if not all(" ".join(parts[k:k + 2]) in frequent for k in range(n - 1)):
+                    continue
+                g = " ".join(parts)
                 if g in found:
                     continue
                 found.add(g)
@@ -990,7 +1085,7 @@ def inside_jokes(msgs, min_count=4, min_years=2, min_members=2, top=12):
                 info["count"] += 1
                 info["members"].add(m["sender"])
                 info["years"].add(m["dt"].year)
-                if info["example"] is None and len(g.split()) >= 2:
+                if info["example"] is None:
                     info["example"] = m["content"]
     jokes = []
     for phrase_text, info in phrase.items():
@@ -1122,9 +1217,10 @@ def write_charts(msgs, stats, analyses, out_dir, track):
             save(fig, "most_reacted.png")
 
     # response speed
-    speed = analyses.get("speed", {})
-    if speed["table"]:
-        rows = sorted(speed["table"], key=lambda r: r["median_s"])[:10]
+    speed = analyses.get("speed") or {}
+    speed_rows = [r for r in speed.get("table") or [] if r["median_s"] is not None]
+    if speed_rows:
+        rows = sorted(speed_rows, key=lambda r: r["median_s"])[:10]
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(8, 4.5))
             _bar(fig, ax, [r["member"] for r in rows], [max(1, r["median_s"]) for r in rows],
@@ -1155,9 +1251,10 @@ def write_charts(msgs, stats, analyses, out_dir, track):
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(9, 4))
             all_years = sorted({y for t in track_data.values() for y in t["by_year"]})
-            width = 0.8 / max(1, len(track_data))
+            n_terms = max(1, len(track_data))
+            width = 0.8 / n_terms
             for i, (term, data) in enumerate(sorted(track_data.items())):
-                xs = [all_years.index(y) + (i - (len(track) - 1) / 2) * width for y in data["by_year"]]
+                xs = [all_years.index(y) + (i - (n_terms - 1) / 2) * width for y in data["by_year"]]
                 ax.bar(xs, [data["by_year"][y] for y in data["by_year"]],
                        width=width, label=term, color=PALETTE[i % len(PALETTE)])
             ax.set_xticks(range(len(all_years)))
@@ -1209,13 +1306,16 @@ def write_charts(msgs, stats, analyses, out_dir, track):
     # word trends over time (fallback top words)
     wt = analyses.get("word_trends", {})
     if wt:
+        # Plot against tick positions, not the year values themselves: mixing
+        # the two puts the data at x=2017.. while the ticks sit at x=0..n.
+        years = list(next(iter(wt.values())))
         with plt.rc_context(theme):
             fig, ax = plt.subplots(figsize=(9, 4))
             for i, (word, series) in enumerate(sorted(wt.items())):
-                ax.plot(list(series), list(series.values()), marker="o", label=word,
-                        color=PALETTE[i % len(PALETTE)])
-            ax.set_xticks(list(range(len(next(iter(wt.values()))))))
-            ax.set_xticklabels(list(next(iter(wt.values()))), rotation=45, ha="right", fontsize=8)
+                ax.plot(range(len(years)), [series.get(y, 0) for y in years],
+                        marker="o", label=word, color=PALETTE[i % len(PALETTE)])
+            ax.set_xticks(range(len(years)))
+            ax.set_xticklabels(years, rotation=45, ha="right", fontsize=8)
             ax.set_title("Top words over time", fontweight="bold")
             ax.legend(fontsize=8)
             save(fig, "word_trends.png")
@@ -1261,10 +1361,10 @@ def write_charts(msgs, stats, analyses, out_dir, track):
             ax.set_xticklabels([months[i][:7] for i in range(0, len(months), max(1, len(months) // 12))],
                                rotation=45, ha="right", fontsize=8)
             ax.set_title("Messages per month", fontweight="bold")
+            peak = max(vals)
             rd_month = ex["record_day"].strftime("%Y-%m")
             if rd_month in months:
                 idx = months.index(rd_month)
-                peak = max(vals)
                 ax.annotate("record day", xy=(idx, ex["monthly"][rd_month]),
                             xytext=(idx, peak * 1.05), ha="center", fontsize=8,
                             color=PALETTE[3], fontweight="bold")
@@ -1449,9 +1549,8 @@ def write_charts(msgs, stats, analyses, out_dir, track):
     emo = analyses.get("emojis")
     if emo and emo["per_year"]:
         years = sorted(emo["per_year"])
-        top_emoji_names = [e for e, _ in Counter(
-            {e: c for y in years for e, c in emo["per_year"][y].items()}
-        ).most_common(5)]
+        top_emoji_names = [e for e, _ in _sum_counters(
+            emo["per_year"][y] for y in years).most_common(5)]
         if top_emoji_names:
             with plt.rc_context(theme):
                 fig, ax = plt.subplots(figsize=(9, 4))
@@ -1487,10 +1586,13 @@ def write_charts(msgs, stats, analyses, out_dir, track):
     topics = analyses.get("topics")
     if topics and topics["by_year"]:
         show_years = topics["years"][-12:]
-        n_rows = max(1, min(len(show_years), 6))
-        n_cols = -(-len(show_years) // n_rows)
+        # Pick the columns first, then derive exactly the rows needed. Deriving
+        # the columns from a row cap instead leaves a whole row empty.
+        n_cols = 1 if len(show_years) == 1 else 2
+        n_rows = -(-len(show_years) // n_cols)
         with plt.rc_context(theme):
-            fig, axes = plt.subplots(n_rows, n_cols, figsize=(11, 2.4 * n_rows))
+            fig, axes = plt.subplots(n_rows, n_cols, figsize=(11, 2.4 * n_rows),
+                                     constrained_layout=True)
             axes = [axes] if n_rows == n_cols == 1 else list(np.ravel(axes))
             for i, year in enumerate(show_years):
                 ax = axes[i]
@@ -1596,12 +1698,16 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
 
     lines.append("## Response speed")
     lines.append("")
-    lines.append("Median time to reply, fastest first:")
+    lines.append("Median time to reply, fastest first. Ghosted % is the share of a "
+                 "member's turns that got no reply within an hour.")
     lines.append("")
     lines.append("| Member | Replies | Median reply | Replies <5 min | Ghosted % |")
     lines.append("|---|---|---|---|---|")
     for r in analyses["speed"]["table"]:
-        lines.append(f"| {r['member']} | {r['replies']} | {r['median_m']} min | {r['fast5_pct']}% | {r['ghost_pct']}% |")
+        med = "-" if r["median_m"] is None else f"{r['median_m']} min"
+        fast = "-" if r["fast5_pct"] is None else f"{r['fast5_pct']}%"
+        ghost = "-" if r["ghost_pct"] is None else f"{r['ghost_pct']}%"
+        lines.append(f"| {r['member']} | {r['replies']} | {med} | {fast} | {ghost} |")
     lines.append("")
 
     swear = analyses["swear"]
@@ -1659,12 +1765,11 @@ def write_summary(title, stats, analyses, track, out_dir, anonymized, dates):
         lines.append("|---|---|---|---|---|---|---|")
         for member in sorted(set().union(*[set(media[k]) for k in
                                            ("photos", "stickers", "gifs", "videos", "audio", "files")]),
-                             key=lambda m: -(media["photos"].get(m, 0)
-                                             + media["stickers"].get(m, 0)
-                                             + media["gifs"].get(m, 0)
-                                             + media["videos"].get(m, 0)
-                                             + media["audio"].get(m, 0)
-                                             + media["files"].get(m, 0))):
+                             # Name breaks ties so a set's arbitrary iteration
+                             # order cannot reshuffle equal rows between runs.
+                             key=lambda m: (-sum(media[k].get(m, 0) for k in
+                                                 ("photos", "stickers", "gifs",
+                                                  "videos", "audio", "files")), m)):
             lines.append(f"| {member} | {media['photos'].get(member, 0)} | "
                          f"{media['stickers'].get(member, 0)} | {media['gifs'].get(member, 0)} | "
                          f"{media['videos'].get(member, 0)} | {media['audio'].get(member, 0)} | "
@@ -2121,9 +2226,8 @@ def insights(stats, analyses):
     conv = analyses.get("conversations", {})
     if conv and conv["longest_run_len"]:
         out.append(f"The longest single session ran {conv['longest_run_len']} messages.")
-    speed = analyses.get("speed", {})
-    if speed["table"]:
-        fastest = speed["table"][0]
+    fastest = _fastest_replier(analyses.get("speed"))
+    if fastest:
         out.append(f"{fastest['member']} answers fastest with a "
                    f"{fastest['median_m']} min median reply time.")
     ghosts = analyses.get("ghosting", {})
@@ -2151,9 +2255,7 @@ def insights(stats, analyses):
                    f"{ex['record_day_count']} messages.")
     emo = analyses.get("emojis")
     if emo and emo["per_year"]:
-        top_emoji = Counter(
-            {e: c for y in emo["per_year"].values() for e, c in y.items()}
-        ).most_common(1)
+        top_emoji = _sum_counters(emo["per_year"].values()).most_common(1)
         if top_emoji:
             out.append(f"The chat's favorite emoji is {top_emoji[0][0]} "
                        f"({top_emoji[0][1]} uses).")
@@ -2351,8 +2453,9 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates):
         rows = []
         for member in sorted(set().union(*[set(media[k]) for k in
                                            ("photos", "stickers", "gifs", "videos", "audio", "files")]),
-                             key=lambda m: sum(media[k].get(m, 0) for k in
-                                               ("photos", "stickers", "gifs", "videos", "audio", "files"))):
+                             key=lambda m: (-sum(media[k].get(m, 0) for k in
+                                                 ("photos", "stickers", "gifs",
+                                                  "videos", "audio", "files")), m)):
             rows.append((html_lib.escape(member),
                          *[str(media[k].get(member, 0)) for k in
                            ("photos", "stickers", "gifs", "videos", "audio", "files")]))
@@ -2630,9 +2733,7 @@ def console_summary(title, stats, analyses, dates):
         print(f"  Unsent messages: {sum(unsent.values())}")
     emo = analyses.get("emojis")
     if emo and emo["per_year"]:
-        top_emoji = Counter(
-            {e: c for y in emo["per_year"].values() for e, c in y.items()}
-        ).most_common(1)
+        top_emoji = _sum_counters(emo["per_year"].values()).most_common(1)
         if top_emoji:
             print(f"  Top emoji: {emoji_lib.demojize(top_emoji[0][0]).strip(':')} "
                   f"({top_emoji[0][1]}x)")
@@ -2810,10 +2911,16 @@ def _message_media_uris(m):
 
 
 def _resolve_media_path(thread_dir, uri):
+    """Resolve an export's media uri to a file inside the thread folder.
+
+    Absolute uris are still resolved relative to the thread: an export that
+    names a path outside it must not be reported as present, or --check would
+    vouch for a file it never actually read.
+    """
     base = thread_dir.resolve()
-    for candidate in (Path(uri), Path(uri.lstrip("/"))):
+    for candidate in (uri, uri.lstrip("/\\")):
         p = (base / candidate).resolve()
-        if p.is_file() and (candidate.is_absolute() or base in p.parents or p == base):
+        if p.is_file() and base in p.parents:
             return p
     return None
 
@@ -2953,9 +3060,13 @@ def _thread_fingerprint(thread_dir):
 
 
 def _config_signature(args):
+    # Tracked terms are resolved, not just named: editing a --track-file has to
+    # invalidate the cache the same way editing --track does.
+    terms = sorted(t.strip() for t in args.track.split(",") if t.strip()) if args.track else []
+    terms += [t for t in load_track_file(args.track_file) if t not in terms]
     return json.dumps({
         "year": args.year, "anonymize": args.anonymize, "top": args.top,
-        "track": sorted(t.strip() for t in args.track.split(",") if t.strip()) if args.track else [],
+        "track": sorted(terms),
         "tz": args.tz or "",
     }, sort_keys=True)
 

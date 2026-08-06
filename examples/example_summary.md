@@ -1,6 +1,6 @@
 # Saturday Squad flashback
 
-Generated 2026-08-04 15:42
+Generated 2026-08-06 10:28
 - **Period**: 2017-01-01 to 2026-01-01
 - **Total messages**: 94
 - **Members**: 4
@@ -102,14 +102,14 @@ Generated 2026-08-04 15:42
 
 ## Response speed
 
-Median time to reply, fastest first:
+Median time to reply, fastest first. Ghosted % is the share of a member's turns that got no reply within an hour.
 
 | Member | Replies | Median reply | Replies <5 min | Ghosted % |
 |---|---|---|---|---|
-| Bob | 18 | 1.0 min | 94.4% | 23.1% |
-| Charlie | 12 | 1.0 min | 100.0% | 25.0% |
-| Dana | 14 | 1.0 min | 92.9% | 31.8% |
 | Alice | 18 | 1.0 min | 83.3% | 26.9% |
+| Bob | 19 | 1.0 min | 94.7% | 23.1% |
+| Charlie | 12 | 1.0 min | 100.0% | 23.5% |
+| Dana | 14 | 1.0 min | 92.9% | 38.9% |
 
 ## Swear-word analytics
 
@@ -275,8 +275,8 @@ Record solo run: **Charlie** with 3 messages (2021-02-14 08:00).
 |---|---|---|---|---|---|
 | Charlie | 2 | 2 | 100.0% | 0 | n/a |
 | Alice | 1 | 1 | 100.0% | 0 | n/a |
-| Bob | 0 | 0 | n/a | 1 | 30.0 min |
 | Dana | 0 | 0 | n/a | 2 | 27.0 min |
+| Bob | 0 | 0 | n/a | 1 | 30.0 min |
 
 ## What the chat was about
 
@@ -290,7 +290,7 @@ Top topic words per year (tf-idf):
 - **2022**: **send** (2), **party** (2), **full** (2), **said** (2), **wishing** (1), **unexpectedly** (1)
 - **2023**: **reunion** (2), **shawarma** (2), **thought** (1), **squad** (1), **real** (1), **place** (1)
 - **2024**: **mid** (2), **love** (2), **valentine's** (1), **untrustworthy** (1), **tonight** (1), **thinking** (1)
-- **2025**: **already** (2), **bro** (3), **booked** (2), **waiting** (1), **payday** (1), **happening** (1)
+- **2025**: **bro** (3), **already** (2), **booked** (2), **waiting** (1), **payday** (1), **happening** (1)
 - **2026**: **ten** (2), **years** (2), **we'll** (1), **next** (1), **many** (1), **here's** (1)
 
 ## Charts

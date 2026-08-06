@@ -1,6 +1,6 @@
 {
   "title": "Saturday Squad",
-  "generated": "2026-08-04 15:42",
+  "generated": "2026-08-06 10:28",
   "anonymized": false,
   "period": {
     "start": "2017-01-01",
@@ -300,10 +300,17 @@
   },
   "response_speed": [
     {
-      "member": "Bob",
+      "member": "Alice",
       "replies": 18,
       "median_seconds": 60.0,
-      "fast5_pct": 94.4,
+      "fast5_pct": 83.3,
+      "ghost_pct": 26.9
+    },
+    {
+      "member": "Bob",
+      "replies": 19,
+      "median_seconds": 60.0,
+      "fast5_pct": 94.7,
       "ghost_pct": 23.1
     },
     {
@@ -311,21 +318,14 @@
       "replies": 12,
       "median_seconds": 60.0,
       "fast5_pct": 100.0,
-      "ghost_pct": 25.0
+      "ghost_pct": 23.5
     },
     {
       "member": "Dana",
       "replies": 14,
       "median_seconds": 60.0,
       "fast5_pct": 92.9,
-      "ghost_pct": 31.8
-    },
-    {
-      "member": "Alice",
-      "replies": 18,
-      "median_seconds": 60.0,
-      "fast5_pct": 83.3,
-      "ghost_pct": 26.9
+      "ghost_pct": 38.9
     }
   ],
   "swear_words": {
@@ -1059,7 +1059,7 @@
           "count": 1
         },
         {
-          "word": "pm",
+          "word": "6pm",
           "count": 1
         },
         {
@@ -1327,20 +1327,20 @@
         "median_m": null
       },
       {
-        "member": "Bob",
-        "asked": 0,
-        "answered": 0,
-        "answer_pct": null,
-        "responses_given": 1,
-        "median_m": 30.0
-      },
-      {
         "member": "Dana",
         "asked": 0,
         "answered": 0,
         "answer_pct": null,
         "responses_given": 2,
         "median_m": 27.0
+      },
+      {
+        "member": "Bob",
+        "asked": 0,
+        "answered": 0,
+        "answer_pct": null,
+        "responses_given": 1,
+        "median_m": 30.0
       }
     ]
   },
@@ -1348,320 +1348,320 @@
     "2017": [
       {
         "word": "usual",
-        "score": 0.1277,
+        "score": 0.1785,
         "count": 2
       },
       {
         "word": "spot",
-        "score": 0.1118,
+        "score": 0.1411,
         "count": 2
       },
       {
         "word": "happy",
-        "score": 0.1118,
+        "score": 0.1411,
         "count": 2
       },
       {
         "word": "told",
-        "score": 0.0751,
+        "score": 0.0893,
         "count": 1
       },
       {
         "word": "stressing",
-        "score": 0.0751,
+        "score": 0.0893,
         "count": 1
       },
       {
         "word": "saturday",
-        "score": 0.0751,
+        "score": 0.0893,
         "count": 1
       }
     ],
     "2018": [
       {
         "word": "morning",
-        "score": 0.1999,
+        "score": 0.2872,
         "count": 2
       },
       {
         "word": "helmet",
-        "score": 0.1999,
+        "score": 0.2872,
         "count": 2
       },
       {
         "word": "wow",
-        "score": 0.1176,
+        "score": 0.1436,
         "count": 1
       },
       {
         "word": "since",
-        "score": 0.1176,
+        "score": 0.1436,
         "count": 1
       },
       {
         "word": "rip",
-        "score": 0.1176,
+        "score": 0.1436,
         "count": 1
       },
       {
         "word": "nerd",
-        "score": 0.1176,
+        "score": 0.1436,
         "count": 1
       }
     ],
     "2019": [
       {
         "word": "shawarma",
-        "score": 0.1606,
+        "score": 0.2609,
         "count": 3
       },
       {
         "word": "trip",
-        "score": 0.1341,
+        "score": 0.174,
         "count": 2
       },
       {
         "word": "life",
-        "score": 0.1341,
+        "score": 0.174,
         "count": 2
       },
       {
         "word": "wedding",
-        "score": 0.0902,
+        "score": 0.1101,
         "count": 1
       },
       {
         "word": "though",
-        "score": 0.0902,
+        "score": 0.1101,
         "count": 1
       },
       {
         "word": "seriously",
-        "score": 0.0902,
+        "score": 0.1101,
         "count": 1
       }
     ],
     "2020": [
       {
         "word": "whole",
-        "score": 0.092,
+        "score": 0.1321,
         "count": 2
       },
       {
         "word": "out",
-        "score": 0.092,
+        "score": 0.1321,
         "count": 2
       },
       {
         "word": "hour",
-        "score": 0.092,
+        "score": 0.1321,
         "count": 2
       },
       {
         "word": "bro",
-        "score": 0.0581,
+        "score": 0.0882,
         "count": 2
       },
       {
         "word": "woke",
-        "score": 0.0541,
+        "score": 0.0661,
         "count": 1
       },
       {
         "word": "tried",
-        "score": 0.0541,
+        "score": 0.0661,
         "count": 1
       }
     ],
     "2021": [
       {
         "word": "pregnant",
-        "score": 0.242,
+        "score": 0.3476,
         "count": 2
       },
       {
         "word": "work",
-        "score": 0.1424,
+        "score": 0.1738,
         "count": 1
       },
       {
         "word": "quiet",
-        "score": 0.1424,
+        "score": 0.1738,
         "count": 1
       },
       {
         "word": "news",
-        "score": 0.1424,
+        "score": 0.1738,
         "count": 1
       },
       {
         "word": "moving",
-        "score": 0.1424,
+        "score": 0.1738,
         "count": 1
       },
       {
         "word": "matches",
-        "score": 0.1424,
+        "score": 0.1738,
         "count": 1
       }
     ],
     "2022": [
       {
         "word": "send",
-        "score": 0.1769,
+        "score": 0.254,
         "count": 2
       },
       {
         "word": "party",
-        "score": 0.1769,
+        "score": 0.254,
         "count": 2
       },
       {
         "word": "full",
-        "score": 0.1769,
+        "score": 0.254,
         "count": 2
       },
       {
         "word": "said",
-        "score": 0.1547,
+        "score": 0.2007,
         "count": 2
       },
       {
         "word": "wishing",
-        "score": 0.104,
+        "score": 0.127,
         "count": 1
       },
       {
         "word": "unexpectedly",
-        "score": 0.104,
+        "score": 0.127,
         "count": 1
       }
     ],
     "2023": [
       {
         "word": "reunion",
-        "score": 0.2555,
+        "score": 0.367,
         "count": 2
       },
       {
         "word": "shawarma",
-        "score": 0.1785,
+        "score": 0.2899,
         "count": 2
       },
       {
         "word": "thought",
-        "score": 0.1503,
+        "score": 0.1835,
         "count": 1
       },
       {
         "word": "squad",
-        "score": 0.1503,
+        "score": 0.1835,
         "count": 1
       },
       {
         "word": "real",
-        "score": 0.1503,
+        "score": 0.1835,
         "count": 1
       },
       {
         "word": "place",
-        "score": 0.1503,
+        "score": 0.1835,
         "count": 1
       }
     ],
     "2024": [
       {
         "word": "mid",
-        "score": 0.219,
+        "score": 0.3145,
         "count": 2
       },
       {
         "word": "love",
-        "score": 0.219,
+        "score": 0.3145,
         "count": 2
       },
       {
         "word": "valentine's",
-        "score": 0.1288,
+        "score": 0.1573,
         "count": 1
       },
       {
         "word": "untrustworthy",
-        "score": 0.1288,
+        "score": 0.1573,
         "count": 1
       },
       {
         "word": "tonight",
-        "score": 0.1288,
+        "score": 0.1573,
         "count": 1
       },
       {
         "word": "thinking",
-        "score": 0.1288,
+        "score": 0.1573,
         "count": 1
       }
     ],
     "2025": [
       {
-        "word": "already",
-        "score": 0.3066,
-        "count": 2
-      },
-      {
         "word": "bro",
-        "score": 0.2904,
+        "score": 0.4408,
         "count": 3
       },
       {
+        "word": "already",
+        "score": 0.4403,
+        "count": 2
+      },
+      {
         "word": "booked",
-        "score": 0.2682,
+        "score": 0.3479,
         "count": 2
       },
       {
         "word": "waiting",
-        "score": 0.1803,
+        "score": 0.2202,
         "count": 1
       },
       {
         "word": "payday",
-        "score": 0.1803,
+        "score": 0.2202,
         "count": 1
       },
       {
         "word": "happening",
-        "score": 0.1803,
+        "score": 0.2202,
         "count": 1
       }
     ],
     "2026": [
       {
         "word": "ten",
-        "score": 0.3285,
+        "score": 0.4718,
         "count": 2
       },
       {
         "word": "years",
-        "score": 0.2874,
+        "score": 0.3728,
         "count": 2
       },
       {
         "word": "we'll",
-        "score": 0.1932,
+        "score": 0.2359,
         "count": 1
       },
       {
         "word": "next",
-        "score": 0.1932,
+        "score": 0.2359,
         "count": 1
       },
       {
         "word": "many",
-        "score": 0.1932,
+        "score": 0.2359,
         "count": 1
       },
       {
         "word": "here's",
-        "score": 0.1932,
+        "score": 0.2359,
         "count": 1
       }
     ]

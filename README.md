@@ -13,7 +13,8 @@ Runs locally. Your data is not uploaded anywhere.
 - Yearly recaps. Top member, top word, record day per year.
 - Member personalities. Signature words, emojis, peak posting hour, night-owl percentage.
 - Reaction dynamics. Most-reacted messages, reactor rankings.
-- Response-speed leaderboard. Median time to reply per member, ghosted percentage.
+- Response-speed leaderboard. Median time to reply per member, plus the share of
+  each member's turns that got no reply within an hour.
 - Swear-word analytics. Per-member counts and signature swear words.
 - Custom term tracking. Count and chart any words or phrases with `--track` or `--track-file`.
 - Conversation starters. Sessions split on 30-minute gaps, longest single back-and-forth.
@@ -156,9 +157,14 @@ opens a Messenger-style reader:
 - Links to the full report and the year-in-review pages
 
 Media files are served from the export folder only; paths are resolved inside the
-thread directory so nothing outside it can be read. Search is a simple substring
-scan over the messages (regex is opt-in), so it is fast enough for everyday use on
-large chats.
+thread directory so nothing outside it can be read, and files are streamed with
+`Range` support so video and audio can seek. Anything that is not an image, video
+or audio downloads rather than rendering, since an export can contain `.html` or
+`.svg` attachments. Search is a substring scan over the messages (regex is
+opt-in) that reports the true match count and shows the first page of hits.
+
+Text that comes from the export — thread titles, names, message bodies — is
+escaped everywhere it is rendered, in the reader and in the generated reports.
 
 ## Getting your Messenger data
 
