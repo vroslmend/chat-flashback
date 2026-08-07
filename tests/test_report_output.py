@@ -348,6 +348,32 @@ def test_summary_json_carries_the_narratives(tmp_path):
     assert "top_reacted" not in payload["members"]["Alice"]
 
 
+def test_the_trendsetters_page_and_its_report_section_name_the_same_member(tmp_path):
+    """Alice says "yeeted" first, three others pick it up, and it sticks around
+    long enough to clear the band."""
+    msgs = [raw("Alice", BASE + timedelta(hours=i), "ordinary talk here")
+            for i in range(110)]
+    msgs += [raw("Bob", BASE + timedelta(hours=i, minutes=1), "ordinary talk here")
+             for i in range(30)]
+    start = BASE + timedelta(days=120)
+    msgs.append(raw("Alice", start, "yeeted the whole thing"))
+    msgs += [raw(who, start + timedelta(days=n), "yeeted again")
+             for n, who in enumerate(["Bob", "Dana", "Charlie"], start=1)]
+    msgs += [raw("Alice", start + timedelta(days=5, hours=h), "yeeted yeeted")
+             for h in range(10)]
+
+    out = generate(tmp_path, msgs, "--json")
+    page = (out / "trendsetters.html").read_text(encoding="utf-8")
+    assert "yeeted" in page
+    assert "3 others" in page
+    report = (out / "report.html").read_text(encoding="utf-8")
+    assert '<section id="trendsetters">' in report
+    assert 'href="trendsetters.html"' in report
+    payload = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    assert payload["trendsetters"]["members"][0]["member"] == "Alice"
+    assert payload["trendsetters"]["words"][0]["word"] == "yeeted"
+
+
 def test_extra_stopwords_reach_the_narrative_pages(tmp_path):
     """Run as a script, analyze_chat is `__main__`, and chatstats importing it
     by name used to get a second copy whose STOPWORDS never saw

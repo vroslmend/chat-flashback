@@ -11,6 +11,7 @@ import html as html_lib
 import io
 import json
 import math
+import random
 import re
 import sys
 import textwrap
@@ -40,6 +41,11 @@ DEFAULT_OUTPUT = "output"
 SKIPPABLE = ("jokes", "sentiment", "wordcloud", "topics", "narratives")
 REPLY_WINDOW_SECONDS = 60 * 60
 CONVERSATION_WINDOW_SECONDS = 30 * 60
+QUIZ_QUESTIONS = 20
+QUIZ_MIN_WORDS = 4
+# The longest conversation on a real chat runs to hundreds of messages; enough
+# of it to see what the night was about is the point, not the transcript.
+LONGEST_SESSION_SHOWN = 15
 MESSAGE_FILE_RE = re.compile(r"^message_\d+\.json$")
 
 # Vocabulary is counted per message, not per keystroke: one pasted wall of
@@ -517,7 +523,11 @@ def _fmt_duration(seconds):
         return f"{seconds:.0f} s"
     if seconds < 3600:
         return f"{seconds / 60:.1f} min"
-    return f"{seconds / 3600:.1f} h"
+    if seconds < 86400:
+        return f"{seconds / 3600:.1f} h"
+    # Silences between conversations run to hundreds of days, and "9243.9 h"
+    # is a number nobody can read as "about a year".
+    return f"{seconds / 86400:.0f} days"
 
 
 def _member_name_words(msgs, extra_names=()):
@@ -1124,6 +1134,17 @@ def hourly_radar(msgs):
     return {member: hours for member, hours in per_member.items()}
 
 
+def hourly_by_year(msgs):
+    """The hourly profile again, cut by year. The all-time average is the shape
+    of nine years stacked on top of each other, which hides the thing worth
+    seeing: somebody's hours sliding four hours later is a move abroad, and
+    their 3am tail disappearing is a job."""
+    per_member = defaultdict(lambda: defaultdict(lambda: [0] * 24))
+    for m in msgs:
+        per_member[m["sender"]][m["dt"].year][m["dt"].hour] += 1
+    return {member: dict(years) for member, years in per_member.items()}
+
+
 def word_cloud_data(msgs):
     overall = Counter()
     per_member = defaultdict(Counter)
@@ -1264,6 +1285,63 @@ def question_stats(msgs):
     return {"table": table, "total_questions": total_asked,
             "total_answered": total_answered,
             "unanswered_count": total_asked - total_answered}
+
+
+def quiz_questions(msgs, personality, names=(), count=QUIZ_QUESTIONS, top=10, seed=0):
+    """"Guess who said this", built out of the signature words already computed.
+
+    A message only qualifies if it carries one of its sender's distinctive
+    words, so the answer is gettable instead of a coin flip. Messages that name
+    somebody give the game away, and bots are not people.
+
+    Answers and wrong answers both come from the `top` busiest members rather
+    than from everybody. A fixed message floor cannot serve both a small export
+    and a million-message one, and somebody with a handful of messages across
+    nine years has no voice to recognise — offered as a wrong answer, they give
+    the round away by being obviously absent.
+
+    Seeded, so rebuilding the report does not silently reshuffle the quiz.
+    """
+    volumes = Counter(m["sender"] for m in msgs)
+    profiles = personality or {}
+    ranked = [member for member, _ in volumes.most_common()
+              if not is_bot(member) and profiles.get(member, {}).get("top_words")][:top]
+    eligible = {member: set(profiles[member]["top_words"]) for member in ranked}
+    # Four to choose between, or there is no question to ask.
+    if len(eligible) < 4:
+        return []
+
+    name_words = _member_name_words(msgs, names)
+    pools = defaultdict(list)
+    for m in msgs:
+        signature = eligible.get(m["sender"])
+        if not signature or not m["content"]:
+            continue
+        tokens = set(_tokens(m))
+        if len(tokens) < QUIZ_MIN_WORDS or tokens & name_words:
+            continue
+        if tokens & signature:
+            pools[m["sender"]].append(m)
+
+    rng = random.Random(seed)
+    for pool in pools.values():
+        rng.shuffle(pool)
+    questions = []
+    # Round-robin, so the quiz is not twenty questions about the loudest member.
+    while len(questions) < count:
+        turn = [member for member in ranked if pools[member]]
+        if not turn:
+            break
+        for member in turn:
+            if len(questions) >= count:
+                break
+            m = pools[member].pop()
+            choices = rng.sample([x for x in ranked if x != member], 3) + [member]
+            rng.shuffle(choices)
+            questions.append({"content": m["content"], "answer": member,
+                              "choices": choices,
+                              "date": m["dt"].strftime("%Y-%m-%d")})
+    return questions
 
 
 def topic_words(msgs, top=6, names=()):
@@ -1805,6 +1883,49 @@ def write_charts(msgs, stats, analyses, out_dir, track, top=10):
             ax.set_title("Hourly activity profile (hours 0-23)", fontweight="bold")
             ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1), fontsize=8)
             save(fig, "hourly_radar.png")
+
+    # hours by year: one row per member, one column per year
+    by_year = analyses.get("radar_years")
+    if by_year:
+        busiest = [m for m, _ in stats["member_msgs"].most_common(top)]
+        members = [m for m in busiest if by_year.get(m)]
+        years = sorted({y for m in members for y in by_year[m]})
+        if members and years:
+            with plt.rc_context(theme):
+                fig, axes = plt.subplots(
+                    len(members), len(years), squeeze=False,
+                    figsize=(max(4, 1.05 * len(years)), max(2, 0.85 * len(members))),
+                    sharex=True,
+                    # Without the gap and the floor below, neighbouring years run
+                    # together into one strip and you cannot tell them apart.
+                    gridspec_kw={"wspace": 0.25, "hspace": 0.35})
+                for r, member in enumerate(members):
+                    # Normalized per member, not globally: a quiet year should
+                    # still show its shape rather than flatten next to a loud one.
+                    peak = max((max(h) for h in by_year[member].values()), default=0) or 1
+                    for c, year in enumerate(years):
+                        ax = axes[r][c]
+                        hours = by_year[member].get(year)
+                        if hours:
+                            ax.fill_between(range(24), hours, color=PALETTE[r % len(PALETTE)],
+                                            linewidth=0)
+                        ax.set_ylim(0, peak)
+                        ax.set_xlim(0, 23)
+                        ax.set_xticks([])
+                        ax.set_yticks([])
+                        for name, side in ax.spines.items():
+                            side.set_visible(name == "bottom")
+                            if name == "bottom":
+                                side.set_color("#c8ccd2")
+                                side.set_linewidth(0.6)
+                        if r == 0:
+                            ax.set_title(str(year), fontsize=7)
+                        if c == 0:
+                            ax.set_ylabel(_shorten(member_label(member), 14), fontsize=7,
+                                          rotation=0, ha="right", va="center")
+                fig.suptitle("When each member posts, year by year (midnight to midnight)",
+                             fontweight="bold", fontsize=11)
+                save(fig, "hourly_by_year.png")
 
     # word clouds
     wc_data = analyses.get("wordcloud")
@@ -2424,6 +2545,8 @@ table{border-collapse:collapse;width:100%;margin:10px 0}
 th,td{border:1px solid #e3e5e8;padding:6px 10px;text-align:left;font-size:13px}
 [data-theme="dark"] th,[data-theme="dark"] td{border-color:#2a2f3a}
 #theme{border:1px solid #e3e5e8;background:#fff;color:#202124;border-radius:6px;padding:4px 10px;cursor:pointer;margin-left:auto}
+.quote{border-left:3px solid #e3e5e8;background:#f7f8fa;border-radius:4px;padding:6px 10px;margin:6px 0;font-size:13px}
+[data-theme="dark"] .quote{border-left-color:#2a2f3a;background:#20242d}
 """
 
 
@@ -2575,7 +2698,9 @@ t.onclick=function(){{var dark=document.body.dataset.theme!=='dark';document.bod
 
 _NARRATIVE_PAGES = [("report.html", "Report"), ("year_in_review.html", "Years"),
                     ("group_history.html", "Group history"),
-                    ("relationships.html", "Relationships"), ("eras.html", "Eras")]
+                    ("relationships.html", "Relationships"), ("eras.html", "Eras"),
+                    ("sessions.html", "Conversations"),
+                    ("trendsetters.html", "Trendsetters"), ("quiz.html", "Quiz")]
 
 
 def _narrative_page(title, current, heading, subtitle, body):
@@ -2764,6 +2889,161 @@ def _member_page_html(title, profile):
                            f"Active {profile['first']} to {profile['last']}.", body)
 
 
+def _sessions_html(title, sess):
+    esc = html_lib.escape
+    turns = ["Member", "Conversations", "Their messages", "Per 100 of their messages"]
+    openers = _rows(turns, [(esc(member_label(r["member"])), f"{r['count']:,}",
+                             f"{r['messages']:,}", f"{r['per_100']}")
+                            for r in sess["openers"]])
+    closers = _rows(turns, [(esc(member_label(r["member"])), f"{r['count']:,}",
+                             f"{r['messages']:,}", f"{r['per_100']}")
+                            for r in sess["closers"]])
+    sizes, durations = sess["sizes"], sess["durations"]
+    shape = _rows(["", "Half are under", "1 in 10 above", "1 in 100 above", "Biggest"],
+                  [("Messages", f"{sizes['p50']:,}", f"{sizes['p90']:,}",
+                    f"{sizes['p99']:,}", f"{sizes['max']:,}"),
+                   ("Length", _fmt_duration(durations["p50"]),
+                    _fmt_duration(durations["p90"]), _fmt_duration(durations["p99"]),
+                    _fmt_duration(durations["max"]))]) if sizes else ""
+
+    longest = sess["longest"]
+    big = ""
+    if longest:
+        shown = longest["messages"][:LONGEST_SESSION_SHOWN]
+        lines = "".join(
+            f"<div class='quote'><b>{esc(member_label(m['sender']))}</b> "
+            f"<span class='muted'>{m['dt'].strftime('%H:%M')}</span><br>"
+            f"{esc(_shorten(m['content'] or _media_label(m), 200))}</div>"
+            for m in shown)
+        more = (f"<p class='muted'>First {len(shown)} of {longest['count']:,}.</p>"
+                if longest["count"] > len(shown) else "")
+        big = (f"<p class='muted'>{longest['count']:,} messages between "
+               f"{longest['start']:%d %b %Y %H:%M} and {longest['end']:%H:%M}, "
+               f"{longest['participants']} people talking.</p>{lines}{more}")
+
+    silences = _rows(["Quiet for", "From", "Until", "Broken by"],
+                     [(_fmt_duration(s["seconds"]),
+                       f"{s['before']['dt']:%d %b %Y}", f"{s['after']['dt']:%d %b %Y}",
+                       f"<b>{esc(member_label(s['after']['sender']))}</b>: "
+                       + esc(_shorten(s["after"]["content"]
+                                      or _media_label(s["after"]), 90)))
+                      for s in sess["silences"]])
+
+    body = "".join([
+        _sec("shape", "How long a conversation runs", shape),
+        _sec("openers", "Who starts conversations", openers),
+        _sec("closers", "Who has the last word",
+             "<p class='muted'>The last message before everything goes quiet for "
+             f"{CONVERSATION_WINDOW_SECONDS // 60} minutes.</p>" + closers),
+        _sec("longest", "The longest conversation", big),
+        _sec("silences", "The longest silences",
+             "<p class='muted'>The chat's own dead periods, and the message that "
+             "ended each one.</p>" + silences),
+    ])
+    return _narrative_page(
+        title, "sessions.html", "Conversations",
+        f"{sess['count']:,} conversations, split wherever nobody spoke for "
+        f"{CONVERSATION_WINDOW_SECONDS // 60} minutes.", body)
+
+
+def _trend_days(value):
+    """A median wait, in the unit it reads in: same day, days, or months."""
+    if value is None:
+        return "-"
+    if value < 1:
+        return "same day"
+    if value < 60:
+        return f"{value:.0f} days"
+    return f"{value / 30.4:.0f} months"
+
+
+def _trendsetters_html(title, trend):
+    esc = html_lib.escape
+    leaders = _rows(["Member", "Words they started", "Their messages",
+                     "Per 1,000 messages", "Typical wait", "Most-adopted word"],
+                    [(esc(member_label(r["member"])), f"{r['words']:,}",
+                      f"{r['messages']:,}", f"{r['per_1k']}", _trend_days(r["days"]),
+                      esc(r["best"])) for r in trend["members"]])
+    words = _rows(["Word", "Started by", "First said", "Picked up by",
+                   "Typical wait", "Uses"],
+                  [(f"<b>{esc(w['word'])}</b>", esc(member_label(w["member"])),
+                    w["first"], f"{w['adopters']} others", _trend_days(w["days"]),
+                    f"{w['uses']:,}") for w in trend["words"]])
+    band = (f"<p class='muted'>Only words the chat used between {trend['min_uses']:,} "
+            f"and {trend['max_uses']:,} times, and only when at least "
+            f"{trend['min_adopters']} other members said them afterwards. A word first "
+            f"said in the chat's opening {trend['warmup_days']} days does not count as "
+            f"started: the export beginning is not the same as the word being new "
+            f"({trend['warmup_skipped']:,} left out that way).</p>")
+    rate = (f"<p class='muted'>Divided by how much each member says, so a chatty member "
+            f"cannot win on volume alone. Members under {trend['min_messages']:,} "
+            f"messages are left out, since a rate needs a denominator worth dividing "
+            f"by.</p>")
+    body = "".join([
+        _sec("who", "Who starts the words",
+             band + rate + (leaders or "<p>Nobody started a word that caught on.</p>")),
+        _sec("words", "The words that caught on",
+             words or "<p>No word in the band was picked up by enough members.</p>"),
+    ])
+    subtitle = (f"{trend['adopted']:,} of the {trend['considered']:,} words in the band "
+                f"were picked up by {trend['min_adopters']} members or more.")
+    return _narrative_page(title, "trendsetters.html", "Trendsetters", subtitle, body)
+
+
+def _quiz_html(title, questions):
+    # `</script>` inside a message would close the tag early and drop the rest
+    # of the quiz on the floor.
+    payload = json.dumps(questions, ensure_ascii=False).replace("</", "<\\/")
+    body = f"""<div id="quiz"></div>
+<p class="muted" id="score"></p>
+<style>
+#quiz .said{{font-size:19px;margin:18px 0 22px;line-height:1.5}}
+#quiz button{{display:block;width:100%;text-align:left;margin:6px 0;padding:9px 13px;
+font:inherit;border:1px solid #e3e5e8;border-radius:8px;background:#f7f8fa;
+color:#202124;cursor:pointer}}
+[data-theme="dark"] #quiz button{{border-color:#2a2f3a;background:#20242d;color:#e8e8e8}}
+#quiz button:hover:not(:disabled){{border-color:#5b8ff9}}
+#quiz button.right{{border-color:#2ea169;background:rgba(46,161,105,.16)}}
+#quiz button.wrong{{border-color:#d1495b;background:rgba(209,73,91,.16)}}
+</style>
+<script>
+var Q={payload}, at=0, hits=0, done=false;
+var box=document.getElementById('quiz'), score=document.getElementById('score');
+function draw(){{
+  if(at>=Q.length){{box.innerHTML='<p class="said">That is all '+Q.length+' of them.</p>';
+    score.textContent='Final score: '+hits+' / '+Q.length;return;}}
+  var q=Q[at];done=false;
+  var html='<p class="muted">'+(at+1)+' of '+Q.length+' &middot; '+q.date+'</p>'+
+           '<div class="said"></div>';
+  q.choices.forEach(function(c,i){{
+    html+='<button data-i="'+i+'"><b>'+(i+1)+'</b> &nbsp;</button>';}});
+  box.innerHTML=html;
+  // Names and message text are set as text, never parsed as markup.
+  box.querySelector('.said').textContent='\\u201c'+q.content+'\\u201d';
+  Array.prototype.forEach.call(box.querySelectorAll('button'),function(b,i){{
+    b.appendChild(document.createTextNode(q.choices[i]));
+    b.onclick=function(){{pick(i);}};}});
+  score.textContent=hits+' / '+at+' so far';
+}}
+function pick(i){{
+  if(done)return;done=true;
+  var q=Q[at],right=q.choices[i]===q.answer;
+  if(right)hits++;
+  Array.prototype.forEach.call(box.querySelectorAll('button'),function(b,j){{
+    b.disabled=true;
+    if(q.choices[j]===q.answer)b.className='right';
+    else if(j===i)b.className='wrong';}});
+  setTimeout(function(){{at++;draw();}},right?650:1500);
+}}
+document.addEventListener('keydown',function(e){{
+  var n=parseInt(e.key,10);if(n>=1&&n<=4)pick(n-1);}});
+draw();
+</script>"""
+    return _narrative_page(title, "quiz.html", "Guess who said this",
+                           "Every line below uses a word that gives its sender away. "
+                           "Press 1-4 or click.", body)
+
+
 def write_narrative_pages(title, analyses, out_dir):
     """The group's history, its pairs, its eras, and a page per member."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -2780,6 +3060,18 @@ def write_narrative_pages(title, analyses, out_dir):
         (out_dir / "eras.html").write_text(
             _eras_html(title, eras, analyses.get("turnover") or {"years": [], "born": {}, "died": {}}),
             encoding="utf-8")
+    sess = analyses.get("sessions")
+    if sess:
+        (out_dir / "sessions.html").write_text(
+            _sessions_html(title, sess), encoding="utf-8")
+    trend = analyses.get("trendsetters")
+    if trend:
+        (out_dir / "trendsetters.html").write_text(
+            _trendsetters_html(title, trend), encoding="utf-8")
+    quiz = analyses.get("quiz")
+    if quiz:
+        (out_dir / "quiz.html").write_text(
+            _quiz_html(title, quiz), encoding="utf-8")
     for member, profile in (analyses.get("member_profiles") or {}).items():
         if profile:
             (out_dir / f"member_{_slug(member)}.html").write_text(
@@ -2877,6 +3169,7 @@ CHART_CAPTIONS = {
     "reply_matrix.png": "Who replies to whom",
     "reply_chains.png": "Longest reply chains",
     "hourly_radar.png": "Hourly activity profiles",
+    "hourly_by_year.png": "Each member's hours, year by year",
     "conversation_starters.png": "Who starts conversations",
     "ghosting.png": "Longest silent streaks",
     "monologues.png": "Longest solo runs",
@@ -2907,6 +3200,7 @@ NAV_LABELS = {
     "topics": "Topics", "jokes": "Jokes", "media": "Media", "speed": "Speed",
     "swear": "Swearing", "starters": "Starters", "ghosting": "Ghosting",
     "hourly": "Hours", "lengths": "Lengths", "domains": "Domains",
+    "trendsetters": "Trendsetters",
 }
 
 
@@ -3011,6 +3305,18 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
             rows.append(row)
         sections.append(_sec("pair_dynamics", "Pair dynamics",
                              _table(["Replier \\n Replied-to"] + [member_label(m) for m in pm["members"]], rows)))
+    trend = analyses.get("trendsetters")
+    if trend and trend["members"]:
+        rows = [(cell(r["member"]), f"{r['words']:,}", f"{r['per_1k']}",
+                 html_lib.escape(r["best"])) for r in trend["members"]]
+        sections.append(_sec("trendsetters", "Who starts the words",
+                             f"<p class='muted'>Words a member said first that at least "
+                             f"{trend['min_adopters']} others then picked up, per 1,000 "
+                             f"of their own messages so the loudest member does not win "
+                             f"by volume. <a href='trendsetters.html'>Full page</a>.</p>"
+                             + _table(["Member", "Words they started",
+                                       "Per 1,000 messages", "Most-adopted word"], rows)))
+
     conv = analyses.get("conversations")
     if conv and conv["starters"]:
         rows = [(cell(m), f"{c:,}") for m, c in conv["starters"].most_common(top)]
@@ -3167,7 +3473,10 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
     written = {"year_in_review.html": True,
                "group_history.html": bool(analyses.get("group_history")),
                "relationships.html": bool(analyses.get("relationships")),
-               "eras.html": bool(analyses.get("eras"))}
+               "eras.html": bool(analyses.get("eras")),
+               "sessions.html": bool(analyses.get("sessions")),
+               "trendsetters.html": bool(analyses.get("trendsetters")),
+               "quiz.html": bool(analyses.get("quiz"))}
     extra_pages = '<span class="pages">' + "".join(
         f'<a class="years" href="{href}">{label}</a>'
         for href, label in _NARRATIVE_PAGES
@@ -3406,6 +3715,9 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates, top=1
     if analyses.get("turnover"):
         payload["vocabulary_turnover"] = {"born": analyses["turnover"]["born"],
                                           "died": analyses["turnover"]["died"]}
+    if analyses.get("trendsetters"):
+        payload["trendsetters"] = {"members": analyses["trendsetters"]["members"],
+                                   "words": analyses["trendsetters"]["words"]}
     if analyses.get("member_profiles"):
         # The messages a member's most-reacted list holds are whole message
         # dicts; the JSON keeps the arc, not the message objects.
@@ -3561,6 +3873,7 @@ def process_thread(thread_dir, args):
         "pace": pace_trends(msgs),
         "pair_matrices": pair_matrices(msgs),
         "radar": hourly_radar(msgs),
+        "radar_years": hourly_by_year(msgs),
         "monologues": monologues(msgs),
         "unsent": unsent_stats(msgs),
         "taken_down": taken_down_stats(msgs),
@@ -3588,6 +3901,12 @@ def process_thread(thread_dir, args):
         analyses["eras"] = chatstats.eras(msgs, names=names)
         analyses["turnover"] = chatstats.vocabulary_turnover(msgs, names=names)
         analyses["member_profiles"] = chatstats.member_profiles(msgs, names=names)
+        analyses["sessions"] = chatstats.sessions(msgs, top=args.top)
+        analyses["trendsetters"] = chatstats.trendsetters(
+            msgs, band=_parse_band(args.trend_band), names=names, top=args.top)
+        # All of these render as narrative pages, so they skip together.
+        analyses["quiz"] = quiz_questions(msgs, analyses["personality"], names=names,
+                                          top=args.top)
 
     out_dir = Path(args.output) / _slug(title)
     _progress(args, "charts")
@@ -3623,6 +3942,23 @@ def _parse_skip(value):
     return names & set(SKIPPABLE)
 
 
+def _parse_band(value):
+    """--trend-band as (min uses, max uses), or None to keep the defaults.
+
+    Left to chatstats to fill in rather than defaulted here, so the band a run
+    used and the band the page explains cannot drift apart.
+    """
+    parts = [p.strip() for p in str(value or "").split(",") if p.strip()]
+    if len(parts) == 2 and all(p.isdigit() for p in parts):
+        low, high = int(parts[0]), int(parts[1])
+        if 0 < low <= high:
+            return low, high
+    if value:
+        print(f"  [warn] ignoring --trend-band {value!r}: expected two rising "
+              f"numbers, e.g. 20,2000")
+    return None
+
+
 def _slug(name):
     return re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_").lower() or "thread"
 
@@ -3633,26 +3969,54 @@ def _progress(args, phase):
         sys.stderr.flush()
 
 
+def _reader_store(thread_dir, args):
+    """The thread's SQLite file, keyed on the export and on the options that
+    change what gets stored.
+
+    The timezone lands in the stored month/day/year and --anonymize in the
+    stored names, so a run under different flags must not read back the last
+    run's file. Named after the folder rather than the chat, because the folder
+    is known without parsing anything and the title is not.
+    """
+    import chatdb
+    out = Path(args.output) / ".reader"
+    out.mkdir(parents=True, exist_ok=True)
+    key = json.dumps([_thread_fingerprint(thread_dir), str(args.tz or ""),
+                      "anon" if args.anonymize else "plain"], sort_keys=True)
+    return chatdb.MessageStore(out / f"{_slug(thread_dir.name)}.sqlite3", key)
+
+
 def serve(thread_dirs, args):
     from chat_ui import run_server
     threads = []
     for d in thread_dirs:
-        loaded = load_thread(d)
-        if loaded is None:
-            continue
-        title, participants, raw = loaded
-        try:
-            msgs = normalize_messages(raw, tz=args.tz)
-        except ValueError as exc:
-            print(f"  [error] {d}: {exc}")
-            continue
-        if not msgs:
+        store = _reader_store(d, args)
+        # A store built for this export already answers every reader query, so
+        # the export is only parsed when the store is missing or stale -- or
+        # when the word explorer needs the messages anyway.
+        msgs, title = None, store.title
+        if not store.ready or not args.no_index:
+            loaded = load_thread(d)
+            if loaded is None:
+                continue
+            title, participants, raw = loaded
+            try:
+                msgs = normalize_messages(raw, tz=args.tz)
+            except ValueError as exc:
+                print(f"  [error] {d}: {exc}")
+                continue
+            if not msgs:
+                print(f"  [skip] {d}: no usable messages")
+                continue
+            if args.anonymize:
+                apply_anonymization(msgs, anonymize_map(msgs))
+            if not store.ready:
+                store.build(msgs, title=title)
+        elif not store.total:
             print(f"  [skip] {d}: no usable messages")
             continue
-        if args.anonymize:
-            apply_anonymization(msgs, anonymize_map(msgs))
-        threads.append({"slug": _slug(title), "title": title,
-                        "thread_dir": d, "msgs": msgs})
+        threads.append({"slug": _slug(title or d.name), "title": title or d.name,
+                        "thread_dir": d, "msgs": msgs, "store": store})
     if not threads:
         print("[error] no readable threads to serve")
         return 1
@@ -3958,6 +4322,10 @@ def main(argv=None):
                              "export does not list, e.g. a deleted account that shows "
                              "as 'Facebook user'. Dropped from topic words and running "
                              "jokes, where a name would otherwise read as a topic")
+    parser.add_argument("--trend-band", default="",
+                        help="How often a word must be used to count as one somebody "
+                             "started, as min,max (default: 20,2000). Lower it on a "
+                             "small chat, where nothing reaches twenty uses")
     parser.add_argument("--stopwords-file", default="",
                         help="Extra stopwords to ignore in word stats, one per line "
                              "(# comments ignored). The built-in list is English only, "

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saturday Squad - relationships</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;padding:0 0 60px;color:#202124;background:#fff;line-height:1.5}
+[data-theme="dark"]{color:#e8e8e8;background:#17191f}
+.topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:8px 20px;background:#f7f8fa;border-bottom:1px solid #e3e5e8;flex-wrap:wrap}
+[data-theme="dark"] .topbar{background:#20242d;border-bottom:1px solid #2a2f3a}
+.brand{font-weight:700;font-size:15px}
+.topbar a{color:#5b8ff9;text-decoration:none;font-size:12px}
+main{max-width:860px;margin:0 auto;padding:0 20px}
+h1{font-size:26px;margin-bottom:4px}
+h2{font-size:20px;margin-top:36px;border-bottom:1px solid #e3e5e8;padding-bottom:6px}
+.muted{color:#777;font-size:13px}
+.cards{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
+.card{flex:1;min-width:120px;background:#f7f8fa;border:1px solid #e3e5e8;border-radius:12px;padding:14px}
+.card b{display:block;font-size:22px}
+.card span{font-size:12px;color:#777}
+[data-theme="dark"] .card{background:#20242d;border-color:#2a2f3a}
+[data-theme="dark"] .card span{color:#9aa0a6}
+[data-theme="dark"] h2{border-color:#2a2f3a}
+ul{margin:8px 0}
+li{margin:4px 0}
+img{max-width:100%;border-radius:10px;margin:6px 0}
+table{border-collapse:collapse;width:100%;margin:10px 0}
+th,td{border:1px solid #e3e5e8;padding:6px 10px;text-align:left;font-size:13px}
+[data-theme="dark"] th,[data-theme="dark"] td{border-color:#2a2f3a}
+#theme{border:1px solid #e3e5e8;background:#fff;color:#202124;border-radius:6px;padding:4px 10px;cursor:pointer;margin-left:auto}
+.quote{border-left:3px solid #e3e5e8;background:#f7f8fa;border-radius:4px;padding:6px 10px;margin:6px 0;font-size:13px}
+[data-theme="dark"] .quote{border-left-color:#2a2f3a;background:#20242d}
+</style>
+</head><body>
+<div class="topbar"><span class="brand">Saturday Squad flashback</span>
+<a href="report.html">Report</a><a href="year_in_review.html">Years</a><a href="group_history.html">Group history</a><a href="eras.html">Eras</a><a href="sessions.html">Conversations</a><a href="trendsetters.html">Trendsetters</a><a href="quiz.html">Quiz</a>
+<button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
+<main>
+<h1>Relationships</h1>
+<p class="muted">4 members, 6 pairs that ever interacted.</p>
+<section id="pairs"><h2>Who interacts with whom</h2><p class='muted'>A reply inside the hour, or a reaction.</p><table><thead><tr><th>Pair</th><th>Interactions</th><th>2017</th><th>2018</th><th>2019</th><th>2020</th><th>2021</th><th>2022</th><th>2023</th><th>2024</th><th>2025</th><th>2026</th></tr></thead><tbody><tr><td>Alice + Bob</td><td>24</td><td>5</td><td>3</td><td>1</td><td>3</td><td>3</td><td>2</td><td>1</td><td>2</td><td>2</td><td>2</td></tr><tr><td>Bob + Dana</td><td>16</td><td>1</td><td>4</td><td>1</td><td>2</td><td>1</td><td>2</td><td>3</td><td>0</td><td>1</td><td>1</td></tr><tr><td>Alice + Charlie</td><td>11</td><td>3</td><td>1</td><td>1</td><td>2</td><td>0</td><td>1</td><td>1</td><td>1</td><td>1</td><td>0</td></tr><tr><td>Bob + Charlie</td><td>11</td><td>1</td><td>0</td><td>1</td><td>2</td><td>0</td><td>0</td><td>2</td><td>2</td><td>1</td><td>2</td></tr><tr><td>Alice + Dana</td><td>10</td><td>0</td><td>2</td><td>3</td><td>0</td><td>1</td><td>1</td><td>1</td><td>1</td><td>1</td><td>0</td></tr><tr><td>Charlie + Dana</td><td>8</td><td>2</td><td>2</td><td>0</td><td>3</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>1</td></tr></tbody></table></section><section id="drift"><h2>Pairs that drifted</h2><p class='muted'>Share of that member's own interaction, from the pair's peak year to 2025, the most recent year the export covers end to end. Pairs under 100 interactions in their peak year are left out.</p><p>No pair moved by more than half.</p></section><section id="silence"><h2>First to speak after a day of silence</h2><table><thead><tr><th>Member</th><th>Times</th></tr></thead><tbody><tr><td>Bob</td><td>7</td></tr><tr><td>Alice</td><td>7</td></tr><tr><td>Dana</td><td>7</td></tr><tr><td>Charlie</td><td>5</td></tr></tbody></table></section><section id="lastword"><h2>Who gets the last word</h2><table><thead><tr><th>Member</th><th>Sessions ended</th></tr></thead><tbody><tr><td>Dana</td><td>11</td></tr><tr><td>Alice</td><td>7</td></tr><tr><td>Charlie</td><td>6</td></tr><tr><td>Bob</td><td>6</td></tr></tbody></table></section><section id="ignored"><h2>Who goes unanswered</h2><p class='muted'>Share of a member's own messages that nobody answered within the hour, so the loudest member does not win by volume.</p><table><thead><tr><th>Member</th><th>Unanswered</th><th>Messages</th><th>Share</th></tr></thead><tbody><tr><td>Dana</td><td>10</td><td>22</td><td>45.5%</td></tr><tr><td>Charlie</td><td>7</td><td>20</td><td>35.0%</td></tr><tr><td>Alice</td><td>7</td><td>26</td><td>26.9%</td></tr><tr><td>Bob</td><td>6</td><td>26</td><td>23.1%</td></tr></tbody></table></section>
+</main>
+<script>
+var t=document.getElementById('theme');
+t.onclick=function(){var dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';t.textContent=dark?'Light':'Dark';};
+</script>
+</body></html>

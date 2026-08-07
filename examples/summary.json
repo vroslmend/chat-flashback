@@ -1,6 +1,6 @@
 {
   "title": "Saturday Squad",
-  "generated": "2026-08-06 20:14",
+  "generated": "2026-08-07 09:31",
   "anonymized": false,
   "period": {
     "start": "2017-01-01",
@@ -26,7 +26,1285 @@
   },
   "total_words": 509,
   "active_days": 27,
-  "members": 4,
+  "members": {
+    "Alice": {
+      "member": "Alice",
+      "total": 26,
+      "share": 28,
+      "first": "2017-01-01",
+      "last": "2026-01-01",
+      "active_days": 21,
+      "by_year": {
+        "2017": 4,
+        "2018": 3,
+        "2019": 3,
+        "2020": 4,
+        "2021": 3,
+        "2022": 2,
+        "2023": 2,
+        "2024": 2,
+        "2025": 2,
+        "2026": 1
+      },
+      "peak_year": 2017,
+      "words_by_year": {
+        "2017": [
+          {
+            "word": "week",
+            "score": 0.3002,
+            "count": 1
+          },
+          {
+            "word": "usual",
+            "score": 0.3002,
+            "count": 1
+          },
+          {
+            "word": "spot",
+            "score": 0.3002,
+            "count": 1
+          },
+          {
+            "word": "shut",
+            "score": 0.3002,
+            "count": 1
+          },
+          {
+            "word": "last",
+            "score": 0.3002,
+            "count": 1
+          },
+          {
+            "word": "lads",
+            "score": 0.3002,
+            "count": 1
+          }
+        ],
+        "2018": [
+          {
+            "word": "sleep",
+            "score": 0.367,
+            "count": 1
+          },
+          {
+            "word": "since",
+            "score": 0.367,
+            "count": 1
+          },
+          {
+            "word": "rip",
+            "score": 0.367,
+            "count": 1
+          },
+          {
+            "word": "looks",
+            "score": 0.367,
+            "count": 1
+          },
+          {
+            "word": "helmet",
+            "score": 0.367,
+            "count": 1
+          },
+          {
+            "word": "haircut",
+            "score": 0.367,
+            "count": 1
+          }
+        ],
+        "2019": [
+          {
+            "word": "wedding",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "trip",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "months",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "issues",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "shawarma",
+            "score": 0.4349,
+            "count": 1
+          },
+          {
+            "word": "booked",
+            "score": 0.4349,
+            "count": 1
+          }
+        ],
+        "2020": [
+          {
+            "word": "moment",
+            "score": 0.2752,
+            "count": 1
+          },
+          {
+            "word": "means",
+            "score": 0.2752,
+            "count": 1
+          },
+          {
+            "word": "lockdown",
+            "score": 0.2752,
+            "count": 1
+          },
+          {
+            "word": "group",
+            "score": 0.2752,
+            "count": 1
+          },
+          {
+            "word": "every",
+            "score": 0.2752,
+            "count": 1
+          },
+          {
+            "word": "decided",
+            "score": 0.2752,
+            "count": 1
+          }
+        ],
+        "2021": [
+          {
+            "word": "work",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "pregnant",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "news",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "moving",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "abroad",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "guys",
+            "score": 0.4349,
+            "count": 1
+          }
+        ],
+        "2022": [
+          {
+            "word": "wishing",
+            "score": 0.3002,
+            "count": 1
+          },
+          {
+            "word": "surprise",
+            "score": 0.3002,
+            "count": 1
+          },
+          {
+            "word": "setting",
+            "score": 0.3002,
+            "count": 1
+          },
+          {
+            "word": "same",
+            "score": 0.3002,
+            "count": 1
+          },
+          {
+            "word": "party",
+            "score": 0.3002,
+            "count": 1
+          },
+          {
+            "word": "own",
+            "score": 0.3002,
+            "count": 1
+          }
+        ],
+        "2023": [
+          {
+            "word": "place",
+            "score": 0.8256,
+            "count": 1
+          },
+          {
+            "word": "checked",
+            "score": 0.8256,
+            "count": 1
+          },
+          {
+            "word": "shawarma",
+            "score": 0.6524,
+            "count": 1
+          },
+          {
+            "word": "guys",
+            "score": 0.6524,
+            "count": 1
+          }
+        ],
+        "2024": [
+          {
+            "word": "saw",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "mid",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "cringe",
+            "score": 1.1009,
+            "count": 1
+          }
+        ],
+        "2025": [
+          {
+            "word": "already",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "booked",
+            "score": 0.8698,
+            "count": 1
+          },
+          {
+            "word": "bro",
+            "score": 0.7347,
+            "count": 1
+          }
+        ],
+        "2026": [
+          {
+            "word": "years",
+            "score": 0.8256,
+            "count": 1
+          },
+          {
+            "word": "ten",
+            "score": 0.8256,
+            "count": 1
+          },
+          {
+            "word": "chat",
+            "score": 0.8256,
+            "count": 1
+          },
+          {
+            "word": "believe",
+            "score": 0.8256,
+            "count": 1
+          }
+        ]
+      },
+      "talks_to": {
+        "2017": {
+          "Bob": 1,
+          "Charlie": 1
+        },
+        "2018": {
+          "Dana": 1,
+          "Bob": 1
+        },
+        "2019": {
+          "Dana": 2
+        },
+        "2020": {
+          "Bob": 1,
+          "Charlie": 2
+        },
+        "2021": {
+          "Bob": 1,
+          "Dana": 1
+        },
+        "2022": {
+          "Bob": 1,
+          "Charlie": 1
+        },
+        "2023": {
+          "Dana": 1
+        },
+        "2024": {
+          "Bob": 2
+        },
+        "2025": {
+          "Dana": 1,
+          "Charlie": 1
+        }
+      },
+      "closest": [
+        [
+          "Bob",
+          7
+        ],
+        [
+          "Dana",
+          6
+        ],
+        [
+          "Charlie",
+          5
+        ]
+      ]
+    },
+    "Bob": {
+      "member": "Bob",
+      "total": 26,
+      "share": 28,
+      "first": "2017-01-01",
+      "last": "2026-01-01",
+      "active_days": 20,
+      "by_year": {
+        "2017": 4,
+        "2018": 4,
+        "2019": 2,
+        "2020": 3,
+        "2021": 2,
+        "2022": 3,
+        "2023": 2,
+        "2024": 3,
+        "2025": 2,
+        "2026": 1
+      },
+      "peak_year": 2017,
+      "words_by_year": {
+        "2017": [
+          {
+            "word": "usual",
+            "score": 0.254,
+            "count": 1
+          },
+          {
+            "word": "spot",
+            "score": 0.254,
+            "count": 1
+          },
+          {
+            "word": "saturday",
+            "score": 0.254,
+            "count": 1
+          },
+          {
+            "word": "meet",
+            "score": 0.254,
+            "count": 1
+          },
+          {
+            "word": "lose",
+            "score": 0.254,
+            "count": 1
+          },
+          {
+            "word": "late",
+            "score": 0.254,
+            "count": 1
+          }
+        ],
+        "2018": [
+          {
+            "word": "wow",
+            "score": 1.6513,
+            "count": 1
+          },
+          {
+            "word": "morning",
+            "score": 1.6513,
+            "count": 1
+          }
+        ],
+        "2019": [
+          {
+            "word": "trip",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "money",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "marrying",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "charlie's",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "believe",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "weekend",
+            "score": 0.3262,
+            "count": 1
+          }
+        ],
+        "2020": [
+          {
+            "word": "whole",
+            "score": 0.367,
+            "count": 1
+          },
+          {
+            "word": "traffic",
+            "score": 0.367,
+            "count": 1
+          },
+          {
+            "word": "stuck",
+            "score": 0.367,
+            "count": 1
+          },
+          {
+            "word": "started",
+            "score": 0.367,
+            "count": 1
+          },
+          {
+            "word": "shit",
+            "score": 0.367,
+            "count": 1
+          },
+          {
+            "word": "own",
+            "score": 0.367,
+            "count": 1
+          }
+        ],
+        "2021": [
+          {
+            "word": "pregnant",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "enough",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "close",
+            "score": 1.1009,
+            "count": 1
+          }
+        ],
+        "2022": [
+          {
+            "word": "shut",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "send",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "said",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "party",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "legendary",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "full",
+            "score": 0.4128,
+            "count": 1
+          }
+        ],
+        "2023": [
+          {
+            "word": "squad",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "reunion",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "real",
+            "score": 1.1009,
+            "count": 1
+          }
+        ],
+        "2024": [
+          {
+            "word": "untrustworthy",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "tonight",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "thinking",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "seen",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "movie",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "group",
+            "score": 0.4128,
+            "count": 1
+          }
+        ],
+        "2025": [
+          {
+            "word": "bro",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "booked",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "already",
+            "score": 1.1009,
+            "count": 1
+          }
+        ],
+        "2026": [
+          {
+            "word": "years",
+            "score": 0.8256,
+            "count": 1
+          },
+          {
+            "word": "ten",
+            "score": 0.8256,
+            "count": 1
+          },
+          {
+            "word": "life",
+            "score": 0.6524,
+            "count": 1
+          },
+          {
+            "word": "best",
+            "score": 0.6524,
+            "count": 1
+          }
+        ]
+      },
+      "talks_to": {
+        "2017": {
+          "Alice": 3
+        },
+        "2018": {
+          "Alice": 1,
+          "Dana": 1
+        },
+        "2019": {
+          "Alice": 1
+        },
+        "2020": {
+          "Alice": 1
+        },
+        "2021": {
+          "Alice": 2
+        },
+        "2022": {
+          "Dana": 1,
+          "Alice": 1
+        },
+        "2023": {
+          "Dana": 1,
+          "Charlie": 1
+        },
+        "2024": {
+          "Charlie": 2
+        },
+        "2025": {
+          "Alice": 2
+        },
+        "2026": {
+          "Alice": 1
+        }
+      },
+      "closest": [
+        [
+          "Alice",
+          12
+        ],
+        [
+          "Dana",
+          3
+        ],
+        [
+          "Charlie",
+          3
+        ]
+      ]
+    },
+    "Dana": {
+      "member": "Dana",
+      "total": 22,
+      "share": 23,
+      "first": "2017-01-01",
+      "last": "2026-01-01",
+      "active_days": 19,
+      "by_year": {
+        "2017": 3,
+        "2018": 3,
+        "2019": 3,
+        "2020": 3,
+        "2021": 1,
+        "2022": 2,
+        "2023": 2,
+        "2024": 1,
+        "2025": 3,
+        "2026": 1
+      },
+      "peak_year": 2017,
+      "words_by_year": {
+        "2017": [
+          {
+            "word": "told",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "stressing",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "obv",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "interview",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "fine",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "brand",
+            "score": 0.4718,
+            "count": 1
+          }
+        ],
+        "2018": [
+          {
+            "word": "merry",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "meeting",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "look",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "helmet",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "die",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "christmas",
+            "score": 0.4128,
+            "count": 1
+          }
+        ],
+        "2019": [
+          {
+            "word": "though",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "spot",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "seriously",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "near",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "hotel",
+            "score": 0.4128,
+            "count": 1
+          },
+          {
+            "word": "awake",
+            "score": 0.4128,
+            "count": 1
+          }
+        ],
+        "2020": [
+          {
+            "word": "woke",
+            "score": 0.1651,
+            "count": 1
+          },
+          {
+            "word": "wish",
+            "score": 0.1651,
+            "count": 1
+          },
+          {
+            "word": "whole",
+            "score": 0.1651,
+            "count": 1
+          },
+          {
+            "word": "tried",
+            "score": 0.1651,
+            "count": 1
+          },
+          {
+            "word": "through",
+            "score": 0.1651,
+            "count": 1
+          },
+          {
+            "word": "thats",
+            "score": 0.1651,
+            "count": 1
+          }
+        ],
+        "2021": [
+          {
+            "word": "quiet",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "group",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "chat",
+            "score": 1.1009,
+            "count": 1
+          }
+        ],
+        "2022": [
+          {
+            "word": "unexpectedly",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "send",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "said",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "full",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "deep",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "nobody",
+            "score": 0.4349,
+            "count": 1
+          }
+        ],
+        "2023": [
+          {
+            "word": "years",
+            "score": 0.3303,
+            "count": 1
+          },
+          {
+            "word": "thought",
+            "score": 0.3303,
+            "count": 1
+          },
+          {
+            "word": "reunion",
+            "score": 0.3303,
+            "count": 1
+          },
+          {
+            "word": "every",
+            "score": 0.3303,
+            "count": 1
+          },
+          {
+            "word": "december",
+            "score": 0.3303,
+            "count": 1
+          },
+          {
+            "word": "confirmed",
+            "score": 0.3303,
+            "count": 1
+          }
+        ],
+        "2024": [
+          {
+            "word": "love",
+            "score": 3.3026,
+            "count": 1
+          }
+        ],
+        "2025": [
+          {
+            "word": "trip",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "happening",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "flights",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "bro",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "book",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "week",
+            "score": 0.4349,
+            "count": 1
+          }
+        ],
+        "2026": [
+          {
+            "word": "we'll",
+            "score": 0.8256,
+            "count": 1
+          },
+          {
+            "word": "same",
+            "score": 0.8256,
+            "count": 1
+          },
+          {
+            "word": "next",
+            "score": 0.8256,
+            "count": 1
+          },
+          {
+            "word": "decade",
+            "score": 0.8256,
+            "count": 1
+          }
+        ]
+      },
+      "talks_to": {
+        "2017": {
+          "Charlie": 2,
+          "Bob": 1
+        },
+        "2018": {
+          "Bob": 1
+        },
+        "2019": {
+          "Bob": 1
+        },
+        "2020": {
+          "Charlie": 1,
+          "Bob": 1
+        },
+        "2021": {
+          "Bob": 1
+        },
+        "2022": {
+          "Bob": 1,
+          "Alice": 1
+        },
+        "2023": {
+          "Bob": 1
+        },
+        "2024": {
+          "Alice": 1
+        },
+        "2025": {
+          "Bob": 1
+        },
+        "2026": {
+          "Charlie": 1
+        }
+      },
+      "closest": [
+        [
+          "Bob",
+          8
+        ],
+        [
+          "Charlie",
+          4
+        ],
+        [
+          "Alice",
+          2
+        ]
+      ]
+    },
+    "Charlie": {
+      "member": "Charlie",
+      "total": 20,
+      "share": 21,
+      "first": "2017-01-01",
+      "last": "2026-01-01",
+      "active_days": 16,
+      "by_year": {
+        "2017": 3,
+        "2018": 2,
+        "2019": 3,
+        "2020": 3,
+        "2021": 3,
+        "2022": 1,
+        "2023": 1,
+        "2024": 2,
+        "2025": 1,
+        "2026": 1
+      },
+      "peak_year": 2017,
+      "words_by_year": {
+        "2017": [
+          {
+            "word": "job",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "guys",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "coming",
+            "score": 1.1009,
+            "count": 1
+          }
+        ],
+        "2018": [
+          {
+            "word": "nerd",
+            "score": 0.8256,
+            "count": 1
+          },
+          {
+            "word": "morning",
+            "score": 0.8256,
+            "count": 1
+          },
+          {
+            "word": "crew",
+            "score": 0.8256,
+            "count": 1
+          },
+          {
+            "word": "bed",
+            "score": 0.8256,
+            "count": 1
+          }
+        ],
+        "2019": [
+          {
+            "word": "shawarma",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "right",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "life",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "joking",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "donkey",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "changing",
+            "score": 0.4718,
+            "count": 1
+          }
+        ],
+        "2020": [
+          {
+            "word": "tell",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "sick",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "please",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "man",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "filmed",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "bro",
+            "score": 0.5504,
+            "count": 1
+          }
+        ],
+        "2021": [
+          {
+            "word": "sleep",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "matches",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "match",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "game",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "addictive",
+            "score": 0.5504,
+            "count": 1
+          },
+          {
+            "word": "judge",
+            "score": 0.4349,
+            "count": 1
+          }
+        ],
+        "2022": [
+          {
+            "word": "wish",
+            "score": 3.3026,
+            "count": 1
+          }
+        ],
+        "2023": [
+          {
+            "word": "first",
+            "score": 3.3026,
+            "count": 1
+          }
+        ],
+        "2024": [
+          {
+            "word": "valentine's",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "said",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "people",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "only",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "mid",
+            "score": 0.4718,
+            "count": 1
+          },
+          {
+            "word": "love",
+            "score": 0.4718,
+            "count": 1
+          }
+        ],
+        "2025": [
+          {
+            "word": "waiting",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "payday",
+            "score": 1.1009,
+            "count": 1
+          },
+          {
+            "word": "judge",
+            "score": 0.8698,
+            "count": 1
+          }
+        ],
+        "2026": [
+          {
+            "word": "many",
+            "score": 1.6513,
+            "count": 1
+          },
+          {
+            "word": "here's",
+            "score": 1.6513,
+            "count": 1
+          }
+        ]
+      },
+      "talks_to": {
+        "2017": {
+          "Bob": 1,
+          "Alice": 1
+        },
+        "2018": {
+          "Alice": 1
+        },
+        "2019": {
+          "Bob": 1,
+          "Alice": 1
+        },
+        "2020": {
+          "Dana": 2,
+          "Bob": 1
+        },
+        "2023": {
+          "Alice": 1
+        },
+        "2024": {
+          "Alice": 1
+        },
+        "2025": {
+          "Bob": 1
+        },
+        "2026": {
+          "Bob": 1
+        }
+      },
+      "closest": [
+        [
+          "Bob",
+          5
+        ],
+        [
+          "Alice",
+          5
+        ],
+        [
+          "Dana",
+          2
+        ]
+      ]
+    }
+  },
   "longest_streak_days": 1,
   "media": 4,
   "calls": 0,
@@ -1720,5 +2998,226 @@
         "2025": 3
       }
     }
+  },
+  "group_history": {
+    "current_name": null,
+    "names": [],
+    "nicknames": {},
+    "membership": [],
+    "busiest": {},
+    "kinds": {}
+  },
+  "relationships": {
+    "pairs": [
+      {
+        "pair": [
+          "Alice",
+          "Bob"
+        ],
+        "total": 24,
+        "by_year": {
+          "2017": 5,
+          "2018": 3,
+          "2019": 1,
+          "2020": 3,
+          "2021": 3,
+          "2022": 2,
+          "2024": 2,
+          "2025": 2,
+          "2026": 2,
+          "2023": 1
+        },
+        "peak_year": 2017
+      },
+      {
+        "pair": [
+          "Bob",
+          "Dana"
+        ],
+        "total": 16,
+        "by_year": {
+          "2017": 1,
+          "2018": 4,
+          "2019": 1,
+          "2020": 2,
+          "2021": 1,
+          "2022": 2,
+          "2023": 3,
+          "2025": 1,
+          "2026": 1
+        },
+        "peak_year": 2018
+      },
+      {
+        "pair": [
+          "Alice",
+          "Charlie"
+        ],
+        "total": 11,
+        "by_year": {
+          "2017": 3,
+          "2018": 1,
+          "2019": 1,
+          "2020": 2,
+          "2022": 1,
+          "2023": 1,
+          "2024": 1,
+          "2025": 1
+        },
+        "peak_year": 2017
+      },
+      {
+        "pair": [
+          "Bob",
+          "Charlie"
+        ],
+        "total": 11,
+        "by_year": {
+          "2017": 1,
+          "2019": 1,
+          "2020": 2,
+          "2023": 2,
+          "2024": 2,
+          "2025": 1,
+          "2026": 2
+        },
+        "peak_year": 2020
+      },
+      {
+        "pair": [
+          "Alice",
+          "Dana"
+        ],
+        "total": 10,
+        "by_year": {
+          "2018": 2,
+          "2019": 3,
+          "2021": 1,
+          "2022": 1,
+          "2023": 1,
+          "2024": 1,
+          "2025": 1
+        },
+        "peak_year": 2019
+      },
+      {
+        "pair": [
+          "Charlie",
+          "Dana"
+        ],
+        "total": 8,
+        "by_year": {
+          "2017": 2,
+          "2020": 3,
+          "2026": 1,
+          "2018": 2
+        },
+        "peak_year": 2020
+      }
+    ],
+    "drift": [],
+    "first_after_silence": {
+      "Bob": 7,
+      "Alice": 7,
+      "Charlie": 5,
+      "Dana": 7
+    },
+    "last_word": {
+      "Charlie": 6,
+      "Dana": 11,
+      "Bob": 6,
+      "Alice": 7
+    },
+    "ignored": [
+      {
+        "member": "Dana",
+        "unanswered": 10,
+        "messages": 22,
+        "pct": 45.5
+      },
+      {
+        "member": "Charlie",
+        "unanswered": 7,
+        "messages": 20,
+        "pct": 35.0
+      },
+      {
+        "member": "Alice",
+        "unanswered": 7,
+        "messages": 26,
+        "pct": 26.9
+      },
+      {
+        "member": "Bob",
+        "unanswered": 6,
+        "messages": 26,
+        "pct": 23.1
+      }
+    ]
+  },
+  "eras": [
+    {
+      "start": "2017-01",
+      "end": "2026-01",
+      "months": 109,
+      "messages": 94,
+      "name": "bro",
+      "words": [
+        {
+          "word": "bro",
+          "count": 6,
+          "lift": 1.0
+        },
+        {
+          "word": "shawarma",
+          "count": 5,
+          "lift": 1.0
+        }
+      ],
+      "top_member": "Alice"
+    }
+  ],
+  "vocabulary_turnover": {
+    "born": {
+      "2019": [
+        {
+          "word": "shawarma",
+          "count": 5
+        }
+      ],
+      "2020": [
+        {
+          "word": "bro",
+          "count": 6
+        }
+      ]
+    },
+    "died": {
+      "2023": [
+        {
+          "word": "shawarma",
+          "count": 5
+        }
+      ],
+      "2025": [
+        {
+          "word": "bro",
+          "count": 6
+        }
+      ]
+    }
+  },
+  "trendsetters": {
+    "members": [],
+    "words": [
+      {
+        "word": "bro",
+        "member": "Charlie",
+        "uses": 6,
+        "first": "2020-08-31",
+        "adopters": 3,
+        "days": 1803
+      }
+    ]
   }
 }

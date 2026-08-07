@@ -1,6 +1,6 @@
 # Saturday Squad flashback
 
-Generated 2026-08-06 20:14
+Generated 2026-08-07 09:31
 
 ## All-time totals
 
@@ -318,6 +318,8 @@ Top topic words per year (tf-idf):
 ![emoji_timeline.png](emoji_timeline.png)
 
 ![ghosting.png](ghosting.png)
+
+![hourly_by_year.png](hourly_by_year.png)
 
 ![hourly_radar.png](hourly_radar.png)
 
