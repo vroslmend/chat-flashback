@@ -298,6 +298,86 @@ def _share(part, whole):
     return (part / whole) if whole else None
 
 
+def _percentiles(values):
+    """p50/p90/p99 and the largest. Session sizes are heavily skewed — a mean
+    sits between the two-message exchanges and the all-nighters and describes
+    neither."""
+    if not values:
+        return None
+    ordered = sorted(values)
+
+    def at(q):
+        return ordered[min(len(ordered) - 1, int(q * len(ordered)))]
+
+    return {"p50": at(0.50), "p90": at(0.90), "p99": at(0.99), "max": ordered[-1]}
+
+
+def _turn_rates(counts, totals, top):
+    """Who opens (or closes) conversations most, and how often they do it per
+    100 of their own messages. The count alone just ranks by who talks most;
+    the rate is what separates someone who always speaks first from someone who
+    is simply always there."""
+    rows = [{"member": member, "count": n, "messages": totals[member],
+             "per_100": round(100 * n / totals[member], 2)}
+            for member, n in counts.items() if totals[member]]
+    rows.sort(key=lambda r: (-r["count"], r["member"]))
+    return rows[:top]
+
+
+def sessions(msgs, top=10):
+    """The chat cut into conversations, and the silences between them.
+
+    Same gap `conversation_starters` splits on, so the two cannot disagree about
+    where a conversation ends. That function reports who opens; this answers the
+    rest of it — who has the last word, how long conversations actually run, and
+    what the chat's own dead periods were.
+
+    Only the current session and the longest-so-far are held, so the pass costs
+    two lists of references rather than one per conversation.
+    """
+    if not msgs:
+        return None
+    openers, closers, totals = Counter(), Counter(), Counter()
+    sizes, durations, silences = [], [], []
+    longest = []
+    current = []
+
+    def close(run):
+        nonlocal longest
+        openers[run[0]["sender"]] += 1
+        closers[run[-1]["sender"]] += 1
+        sizes.append(len(run))
+        durations.append((run[-1]["ts_ms"] - run[0]["ts_ms"]) / 1000)
+        if len(run) > len(longest):
+            longest = list(run)
+
+    for m in msgs:
+        totals[m["sender"]] += 1
+        if current:
+            gap = (m["ts_ms"] - current[-1]["ts_ms"]) / 1000
+            if gap > SESSION_GAP_SECONDS:
+                silences.append({"seconds": gap, "before": current[-1], "after": m})
+                close(current)
+                current = []
+        current.append(m)
+    if current:
+        close(current)
+
+    silences.sort(key=lambda s: -s["seconds"])
+    return {
+        "count": len(sizes),
+        "openers": _turn_rates(openers, totals, top),
+        "closers": _turn_rates(closers, totals, top),
+        "sizes": _percentiles(sizes),
+        "durations": _percentiles(durations),
+        "longest": {"count": len(longest), "start": longest[0]["dt"],
+                    "end": longest[-1]["dt"],
+                    "participants": len({m["sender"] for m in longest}),
+                    "messages": longest} if longest else None,
+        "silences": silences[:top],
+    }
+
+
 # --------------------------------------------------------------------------- #
 # one member's arc                                                             #
 # --------------------------------------------------------------------------- #

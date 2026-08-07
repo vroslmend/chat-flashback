@@ -343,3 +343,55 @@ def test_a_word_said_once_is_not_vocabulary():
     msgs += [mk("Alice", BASE.replace(year=2021), "unicorn season")]
     turnover = cs.vocabulary_turnover(msgs)
     assert turnover["born"].get(2021, []) == []
+
+
+# --------------------------------------------------------------------------- #
+# conversations and the silences between them                                  #
+# --------------------------------------------------------------------------- #
+
+def test_session_splits_only_once_the_gap_is_exceeded():
+    """The boundary is the whole definition, so pin both sides of it."""
+    gap = cs.SESSION_GAP_SECONDS
+    msgs = [mk("Alice", BASE, "one"),
+            mk("Bob", BASE + timedelta(seconds=gap), "still the same conversation"),
+            mk("Bob", BASE + timedelta(seconds=2 * gap + 1), "a new one")]
+    sess = cs.sessions(msgs)
+    assert sess["count"] == 2
+    assert sess["sizes"]["max"] == 2
+
+
+def test_one_silence_is_reported_per_gap_with_both_sides():
+    gap = cs.SESSION_GAP_SECONDS
+    msgs = [mk("Alice", BASE, "before the quiet"),
+            mk("Bob", BASE + timedelta(days=30), "after the quiet")]
+    sess = cs.sessions(msgs)
+    assert len(sess["silences"]) == 1
+    silence = sess["silences"][0]
+    assert silence["before"]["content"] == "before the quiet"
+    assert silence["after"]["content"] == "after the quiet"
+    assert silence["seconds"] == 30 * 86400
+    assert silence["seconds"] > gap
+
+
+def test_openers_and_closers_are_the_ends_of_each_conversation():
+    gap = cs.SESSION_GAP_SECONDS
+    msgs = [mk("Alice", BASE, "opens"),
+            mk("Bob", BASE + timedelta(minutes=1), "closes"),
+            mk("Alice", BASE + timedelta(seconds=gap + 61), "opens again"),
+            mk("Bob", BASE + timedelta(seconds=gap + 121), "closes again")]
+    sess = cs.sessions(msgs)
+    assert {r["member"]: r["count"] for r in sess["openers"]} == {"Alice": 2}
+    assert {r["member"]: r["count"] for r in sess["closers"]} == {"Bob": 2}
+    # Alice opened both of her two messages' conversations: 100 per 100.
+    assert next(r for r in sess["openers"] if r["member"] == "Alice")["per_100"] == 100.0
+
+
+def test_a_single_message_chat_is_one_conversation_and_no_silence():
+    sess = cs.sessions([mk("Alice", BASE, "alone")])
+    assert sess["count"] == 1
+    assert sess["silences"] == []
+    assert sess["longest"]["count"] == 1
+
+
+def test_sessions_of_an_empty_chat_is_none():
+    assert cs.sessions([]) is None

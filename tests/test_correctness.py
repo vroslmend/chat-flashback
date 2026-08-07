@@ -583,3 +583,72 @@ def test_incremental_rerun_when_track_file_changes(tmp_path, capsys):
     terms.write_text("bro\nshawarma\n", encoding="utf-8")
     assert ac.main(args) == 0
     assert "unchanged since last run" not in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------- #
+# hours by year, and the "guess who said this" quiz                            #
+# --------------------------------------------------------------------------- #
+
+def test_hours_are_kept_apart_by_year():
+    msgs = [mk("Alice", datetime(2020, 6, 1, 3, 0), "late"),
+            mk("Alice", datetime(2021, 6, 1, 14, 0), "reformed")]
+    by_year = ac.hourly_by_year(msgs)
+    assert by_year["Alice"][2020][3] == 1
+    assert by_year["Alice"][2021][14] == 1
+    # The 3am habit belongs to 2020 alone; the all-time radar is what blends them.
+    assert by_year["Alice"][2021][3] == 0
+
+
+def _quiz_chat(extra=()):
+    """Four members, each with a word only they use."""
+    words = {"Alice": "shawarma", "Bob": "cricket", "Carol": "biryani", "Dave": "chai"}
+    msgs = []
+    at = BASE
+    for i in range(6):
+        for member, word in words.items():
+            at += timedelta(minutes=1)
+            msgs.append(mk(member, at, f"{word} again today please {i}"))
+    return msgs + list(extra)
+
+
+def test_quiz_answers_are_always_one_of_the_choices():
+    msgs = _quiz_chat()
+    questions = ac.quiz_questions(msgs, ac.personalities(msgs))
+    assert questions
+    assert all(q["answer"] in q["choices"] for q in questions)
+    assert all(len(q["choices"]) == 4 for q in questions)
+
+
+def test_quiz_is_stable_across_runs():
+    """The report is regenerated often; the quiz should not silently reshuffle."""
+    msgs = _quiz_chat()
+    personality = ac.personalities(msgs)
+    assert ac.quiz_questions(msgs, personality) == ac.quiz_questions(msgs, personality)
+
+
+def test_quiz_leaves_out_bots_and_messages_that_name_somebody():
+    giveaway = mk("Alice", BASE + timedelta(days=1), "shawarma with Bob tonight okay")
+    bot = mk("Meta AI", BASE + timedelta(days=2), "shawarma is a levantine dish here")
+    msgs = _quiz_chat([giveaway, bot])
+    questions = ac.quiz_questions(msgs, ac.personalities(msgs))
+    contents = {q["content"] for q in questions}
+    assert giveaway["content"] not in contents
+    assert bot["content"] not in contents
+    assert all(q["answer"] != "Meta AI" for q in questions)
+
+
+def test_quiz_needs_four_members_to_choose_between():
+    msgs = [mk("Alice", BASE + timedelta(minutes=i), f"shawarma please {i}")
+            for i in range(6)]
+    assert ac.quiz_questions(msgs, ac.personalities(msgs)) == []
+
+
+def test_quiz_draws_only_from_the_busiest_members():
+    """--top caps the cast, so a member outside it is never an answer and never
+    a wrong answer either."""
+    msgs = _quiz_chat()
+    quiet = [mk("Eve", BASE + timedelta(days=1, minutes=i), f"pomegranate {i}")
+             for i in range(6)]
+    questions = ac.quiz_questions(msgs + quiet, ac.personalities(msgs + quiet), top=4)
+    assert questions
+    assert all("Eve" not in q["choices"] for q in questions)
