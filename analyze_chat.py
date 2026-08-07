@@ -3882,26 +3882,54 @@ def _progress(args, phase):
         sys.stderr.flush()
 
 
+def _reader_store(thread_dir, args):
+    """The thread's SQLite file, keyed on the export and on the options that
+    change what gets stored.
+
+    The timezone lands in the stored month/day/year and --anonymize in the
+    stored names, so a run under different flags must not read back the last
+    run's file. Named after the folder rather than the chat, because the folder
+    is known without parsing anything and the title is not.
+    """
+    import chatdb
+    out = Path(args.output) / ".reader"
+    out.mkdir(parents=True, exist_ok=True)
+    key = json.dumps([_thread_fingerprint(thread_dir), str(args.tz or ""),
+                      "anon" if args.anonymize else "plain"], sort_keys=True)
+    return chatdb.MessageStore(out / f"{_slug(thread_dir.name)}.sqlite3", key)
+
+
 def serve(thread_dirs, args):
     from chat_ui import run_server
     threads = []
     for d in thread_dirs:
-        loaded = load_thread(d)
-        if loaded is None:
-            continue
-        title, participants, raw = loaded
-        try:
-            msgs = normalize_messages(raw, tz=args.tz)
-        except ValueError as exc:
-            print(f"  [error] {d}: {exc}")
-            continue
-        if not msgs:
+        store = _reader_store(d, args)
+        # A store built for this export already answers every reader query, so
+        # the export is only parsed when the store is missing or stale -- or
+        # when the word explorer needs the messages anyway.
+        msgs, title = None, store.title
+        if not store.ready or not args.no_index:
+            loaded = load_thread(d)
+            if loaded is None:
+                continue
+            title, participants, raw = loaded
+            try:
+                msgs = normalize_messages(raw, tz=args.tz)
+            except ValueError as exc:
+                print(f"  [error] {d}: {exc}")
+                continue
+            if not msgs:
+                print(f"  [skip] {d}: no usable messages")
+                continue
+            if args.anonymize:
+                apply_anonymization(msgs, anonymize_map(msgs))
+            if not store.ready:
+                store.build(msgs, title=title)
+        elif not store.total:
             print(f"  [skip] {d}: no usable messages")
             continue
-        if args.anonymize:
-            apply_anonymization(msgs, anonymize_map(msgs))
-        threads.append({"slug": _slug(title), "title": title,
-                        "thread_dir": d, "msgs": msgs})
+        threads.append({"slug": _slug(title or d.name), "title": title or d.name,
+                        "thread_dir": d, "msgs": msgs, "store": store})
     if not threads:
         print("[error] no readable threads to serve")
         return 1

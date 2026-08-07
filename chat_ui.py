@@ -5,7 +5,6 @@ Started with `python analyze_chat.py --input <thread> --serve`. Binds to
 filters, full-text search, reply threading, media, and sentiment tinting.
 """
 
-import bisect
 import json
 import mimetypes
 import random
@@ -15,6 +14,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 import analyze_chat as ac
+import chatdb
 from wordindex import WordIndex
 
 _PAGE_SIZE = 400
@@ -28,153 +28,122 @@ def _snippet(text, n=90):
 
 
 class ThreadIndex:
-    def __init__(self, slug, title, thread_dir, msgs, build_index=True):
+    """The reader's view of one thread, answered out of a `MessageStore`.
+
+    `msgs` is only needed to fill an empty store and to build the word index.
+    Once the store is populated and the word explorer is off, the reader runs
+    without the parsed messages in memory at all.
+    """
+
+    def __init__(self, slug, title, thread_dir, msgs=None, build_index=True, store=None):
         self.slug = slug
         self.title = title
         self.thread_dir = Path(thread_dir)
-        self.msgs = msgs
-        self.by_id = {m.get("id"): m for m in msgs if m.get("id") is not None}
+        if store is None:
+            # No file given: an in-memory database, so callers that just hand
+            # over a list of messages keep working unchanged.
+            store = chatdb.MessageStore(":memory:", "memory")
+        self.store = store
+        if not self.store.ready:
+            if msgs is None:
+                raise ValueError("an unbuilt store needs messages to fill it")
+            self.store.build(msgs)
+        self.total = self.store.total
         self.colors = {}
-        members = sorted({m["sender"] for m in msgs})
-        for i, name in enumerate(members):
+        for i, name in enumerate(sorted(n for n, _ in self.store.members())):
             self.colors[name] = ac.PALETTE[i % len(ac.PALETTE)]
-        self.all_pairs = []
-        self.member_pairs = {}
-        # (month, day) -> indices, so "on this day" can group by the same local
-        # calendar date the rest of the report uses. Rebuilding the day window
-        # from timestamps would apply the system timezone instead of --tz.
-        self.by_monthday = {}
-        for i, m in enumerate(msgs):
-            self.all_pairs.append((m["ts_ms"], i))
-            self.member_pairs.setdefault(m["sender"], []).append((m["ts_ms"], i))
-            dt = m["dt"]
-            self.by_monthday.setdefault((dt.month, dt.day), []).append(i)
         self._sent_cache = {}
         # The word explorer's inverted index. Built here rather than lazily so
         # the cost lands at startup, where it is announced, instead of on the
         # first search.
-        self.words = WordIndex(msgs) if build_index else None
+        self.words = WordIndex(msgs) if (build_index and msgs is not None) else None
 
     def to_json(self, idx):
-        m = self.msgs[idx]
+        row = self.store.row(idx)
+        return self._row_json(row) if row is not None else None
+
+    def _row_json(self, row):
+        p = json.loads(row["payload"])
         j = {
-            "ts": m["ts_ms"], "sender": m["sender"], "color": self.colors[m["sender"]],
-            "content": m["content"], "mtype": m["mtype"],
-            "reactions": [{"actor": a, "reaction": r} for a, r in m["reactions"]],
-            "has_photo": m.get("has_photo", False), "photo_uris": m.get("photo_uris", []),
-            "has_sticker": m.get("has_sticker", False),
-            "has_gif": m.get("has_gif", False), "gif_uris": m.get("gif_uris", []),
-            "has_video": m.get("has_video", False), "video_uris": m.get("video_uris", []),
-            "has_audio": m.get("has_audio", False), "audio_uris": m.get("audio_uris", []),
-            "has_file": m.get("has_file", False), "file_uris": m.get("file_uris", []),
-            "file_names": m.get("file_names", []),
-            "is_taken_down": m.get("is_taken_down", False),
-            "link": m.get("link"),
-            "is_unsent": m.get("is_unsent", False), "reply_to": None, "sentiment": None,
+            "ts": row["ts_ms"], "sender": row["sender"],
+            "color": self.colors.get(row["sender"], ac.PALETTE[0]),
+            "content": row["content"], "mtype": p.get("mtype"),
+            "reactions": [{"actor": a, "reaction": r} for a, r in p.get("reactions", [])],
+            "has_photo": p.get("has_photo", False), "photo_uris": p.get("photo_uris", []),
+            "has_sticker": p.get("has_sticker", False),
+            "has_gif": p.get("has_gif", False), "gif_uris": p.get("gif_uris", []),
+            "has_video": p.get("has_video", False), "video_uris": p.get("video_uris", []),
+            "has_audio": p.get("has_audio", False), "audio_uris": p.get("audio_uris", []),
+            "has_file": p.get("has_file", False), "file_uris": p.get("file_uris", []),
+            "file_names": p.get("file_names", []),
+            "is_taken_down": p.get("is_taken_down", False),
+            "link": p.get("link"),
+            "is_unsent": p.get("is_unsent", False), "reply_to": None, "sentiment": None,
         }
-        rid = m.get("reply_to")
-        if rid is not None and rid in self.by_id:
-            p = self.by_id[rid]
-            j["reply_to"] = {"sender": p["sender"], "snippet": _snippet(p["content"])}
-        if ac._VADER is not None and m["content"]:
-            c = self._sent_cache.get(m["content"])
+        if row["reply_to"] is not None:
+            parent = self.store.by_msg_id(row["reply_to"])
+            if parent is not None:
+                j["reply_to"] = {"sender": parent["sender"],
+                                 "snippet": _snippet(parent["content"])}
+        if ac._VADER is not None and row["content"]:
+            c = self._sent_cache.get(row["content"])
             if c is None:
-                c = ac._VADER.polarity_scores(m["content"])["compound"]
-                self._sent_cache[m["content"]] = c
+                c = ac._VADER.polarity_scores(row["content"])["compound"]
+                self._sent_cache[row["content"]] = c
                 if len(self._sent_cache) > 50_000:
                     self._sent_cache.clear()
             j["sentiment"] = c
         return j
 
     def meta(self):
-        total = len(self.msgs)
-        member_counts = {}
-        for m in self.msgs:
-            member_counts[m["sender"]] = member_counts.get(m["sender"], 0) + 1
+        start, end = self.store.span()
         members = [{"name": n, "count": c, "color": self.colors[n]}
-                   for n, c in sorted(member_counts.items(), key=lambda kv: -kv[1])]
+                   for n, c in self.store.members()]
         return {
             "title": self.title,
             "slug": self.slug,
-            "total": total,
-            "start": self.msgs[0]["ts_ms"],
-            "end": self.msgs[-1]["ts_ms"],
+            "total": self.total,
+            "start": start,
+            "end": end,
             "members": members,
             "sentiment_available": ac._VADER is not None,
-            "has_replies": bool(self.by_id),
+            "has_replies": self.store.has_replies(),
         }
 
     def page(self, before=None, after=None, member=None, q=None, limit=_PAGE_SIZE, regex=False):
         if q:
             return self._search(q, member, limit, regex)
-        pairs = self.member_pairs.get(member) if member else self.all_pairs
-        n = len(pairs)
-        if before is not None:
-            end = bisect.bisect_left(pairs, (before, -1))
-            start = max(0, end - limit)
-            sel = pairs[start:end][::-1]
-            next_before = pairs[start][0] if start > 0 else None
-            next_after = None
-        elif after is not None:
-            start = bisect.bisect_right(pairs, (after, 10 ** 15))
-            end = min(n, start + limit)
-            sel = pairs[start:end]
-            next_after = pairs[end - 1][0] if end < n else None
-            next_before = None
-        else:
-            end = n
-            start = max(0, end - limit)
-            sel = pairs[start:end][::-1]
-            next_before = pairs[start][0] if start > 0 else None
-            next_after = None
-        return {"messages": [self.to_json(i) for _, i in sel],
-                "next_before": next_before, "next_after": next_after,
+        rows, cursor = self.store.page(before=before, after=after, member=member,
+                                       limit=limit)
+        return {"messages": [self._row_json(r) for r in rows],
+                "next_before": cursor["next_before"],
+                "next_after": cursor["next_after"],
                 "search": False}
 
     def _search(self, q, member, limit, regex=False):
-        ql = q.lower()
         pattern = None
         if regex:
             try:
                 pattern = re.compile(q, re.IGNORECASE)
             except re.error:
                 pattern = None
-        # Keep indices, never the message dicts: recovering an index later with
-        # msgs.index() is a linear scan of dict comparisons per hit, which turns
-        # a search over a long chat into seconds of quadratic work.
-        hits = []
-        total = 0
-        for i, m in enumerate(self.msgs):
-            if member and m["sender"] != member:
-                continue
-            content = m["content"] or ""
-            if pattern is not None:
-                found = pattern.search(content) is not None
-            else:
-                found = ql in content.lower()
-            if found:
-                total += 1
-                if len(hits) < limit:
-                    hits.append(i)
-        return {"messages": [self.to_json(i) for i in hits],
+        if pattern is not None:
+            rows, total = self.store.search_regex(pattern, member, limit)
+        else:
+            rows, total = self.store.search(q, member, limit)
+        return {"messages": [self._row_json(r) for r in rows],
                 "next_before": None, "next_after": None,
                 "search": True, "total_matches": total,
-                "shown": len(hits), "truncated": total > len(hits)}
+                "shown": len(rows), "truncated": total > len(rows)}
 
     def day(self, month, day, limit=_PAGE_SIZE):
-        out = sorted(self.by_monthday.get((month, day), []),
-                     key=lambda i: self.msgs[i]["ts_ms"])
-        years = sorted({self.msgs[i]["dt"].year for i in out})
-        return {"messages": [self.to_json(i) for i in out[:limit]],
-                "total": len(out), "years": years}
+        rows, total, years = self.store.day(month, day, limit)
+        return {"messages": [self._row_json(r) for r in rows],
+                "total": total, "years": years}
 
     def random_memory(self):
-        reacted = [i for i, m in enumerate(self.msgs) if m["reactions"]]
-        long_text = [i for i, m in enumerate(self.msgs)
-                     if m["content"] and len(m["content"]) > 40]
-        pool = reacted or long_text or list(range(len(self.msgs)))
-        idx = random.choice(pool)
-        return {"message": self.to_json(idx)}
+        row = self.store.random_row()
+        return {"message": self._row_json(row) if row is not None else None}
 
     def resolve_media(self, rel):
         # Same resolver the analyzer uses, so the reader and --check agree on
@@ -325,7 +294,7 @@ def make_handler(threads, output_dir):
         def _landing(self):
             items = "".join(
                 f'<li><a href="/t/{t.slug}/">{html(t.title)}</a> '
-                f"<span class=\"muted\">{len(t.msgs):,} messages</span></li>"
+                f"<span class=\"muted\">{t.total:,} messages</span></li>"
                 for t in threads.values()
             )
             html_doc = f"""<!doctype html>
@@ -718,11 +687,12 @@ def run_server(threads, port, output_dir, build_index=True):
         if build_index:
             print(f"  Indexing {t['title']} for word search...", flush=True)
         indexed[t["slug"]] = ThreadIndex(t["slug"], t["title"], t["thread_dir"],
-                                         t["msgs"], build_index=build_index)
+                                         t.get("msgs"), build_index=build_index,
+                                         store=t.get("store"))
     handler = make_handler(indexed, Path(output_dir))
     server = ThreadingHTTPServer(("127.0.0.1", port), handler)
     for t in indexed.values():
-        print(f"  {t.title}: {len(t.msgs):,} messages  ->  "
+        print(f"  {t.title}: {t.total:,} messages  ->  "
               f"http://127.0.0.1:{port}/t/{t.slug}/")
     print("  Press Ctrl+C to stop.")
     try:
