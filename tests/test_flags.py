@@ -53,6 +53,19 @@ def test_progress_flag_smoke(tmp_path):
     assert (tmp_path / "saturday_squad" / "summary.md").exists()
 
 
+def test_trend_band_reaches_the_page_and_a_bad_one_is_ignored(tmp_path, capsys):
+    out = tmp_path / "band"
+    assert ac.main(["--input", SAMPLE, "--output", str(out), "--trend-band", "3,50"]) == 0
+    page = (out / "saturday_squad" / "trendsetters.html").read_text(encoding="utf-8")
+    assert "between 3 and 50 times" in page
+
+    bad = tmp_path / "bad_band"
+    assert ac.main(["--input", SAMPLE, "--output", str(bad), "--trend-band", "lots"]) == 0
+    assert "ignoring --trend-band" in capsys.readouterr().out
+    page = (bad / "saturday_squad" / "trendsetters.html").read_text(encoding="utf-8")
+    assert "between 20 and 2,000 times" in page
+
+
 def test_incremental_skips_unchanged(tmp_path, capsys):
     out = tmp_path / "inc"
     assert ac.main(["--input", SAMPLE, "--output", str(out), "--incremental", "--json"]) == 0

@@ -395,3 +395,89 @@ def test_a_single_message_chat_is_one_conversation_and_no_silence():
 
 def test_sessions_of_an_empty_chat_is_none():
     assert cs.sessions([]) is None
+
+
+# --------------------------------------------------------------------------- #
+# who starts the words                                                         #
+# --------------------------------------------------------------------------- #
+
+def _filler(who, n):
+    """Ordinary talk, so a member has a denominator to be divided by."""
+    return [mk(who, BASE + timedelta(hours=i), "ordinary talk") for i in range(n)]
+
+
+def _catches_on(who, word, day, adopters, uses=10):
+    """`who` says `word` first, others pick it up a day apart, then it sticks."""
+    out = [mk(who, BASE + timedelta(days=day), f"{word} again")]
+    for n, other in enumerate(adopters, start=1):
+        out.append(mk(other, BASE + timedelta(days=day + n), f"{word} again"))
+    out += [mk(who, BASE + timedelta(days=day + 5, hours=h), f"{word} {word}")
+            for h in range(uses)]
+    return out
+
+
+def _chat(*parts):
+    return sorted([m for part in parts for m in part], key=lambda m: m["ts_ms"])
+
+
+def test_a_word_is_credited_to_whoever_said_it_first():
+    msgs = _chat(_filler("Alice", 300),
+                 _catches_on("Alice", "yeeted", 120, ["Bob", "Dana", "Charlie"]))
+    trend = cs.trendsetters(msgs)
+    assert [w["word"] for w in trend["words"]] == ["yeeted"]
+    assert trend["words"][0]["member"] == "Alice"
+    assert trend["words"][0]["adopters"] == 3
+    # Picked up one, two and three days later.
+    assert trend["words"][0]["days"] == 2
+
+
+def test_a_word_only_two_others_repeated_is_not_a_trend():
+    msgs = _chat(_filler("Alice", 300),
+                 _catches_on("Alice", "yeeted", 120, ["Bob", "Dana"]))
+    assert cs.trendsetters(msgs)["words"] == []
+
+
+def test_a_word_from_the_chats_opening_days_is_started_by_nobody():
+    """The export beginning is not the same as the word being new."""
+    cast = ["Bob", "Dana", "Charlie"]
+    msgs = _chat(_filler("Alice", 300),
+                 _catches_on("Alice", "yeeted", 10, cast),
+                 _catches_on("Alice", "sussy", 120, cast))
+    trend = cs.trendsetters(msgs)
+    assert [w["word"] for w in trend["words"]] == ["sussy"]
+    assert trend["warmup_skipped"] >= 1
+
+
+def test_a_word_outside_the_band_is_not_looked_at():
+    msgs = _chat(_filler("Alice", 300),
+                 _catches_on("Alice", "yeeted", 120, ["Bob", "Dana", "Charlie"], uses=2))
+    # Eight uses: under the default floor of twenty, over a ceiling of three.
+    assert cs.trendsetters(msgs)["words"] == []
+    assert cs.trendsetters(msgs, band=(1, 3))["words"] == []
+    assert [w["word"] for w in cs.trendsetters(msgs, band=(5, 50))["words"]] == ["yeeted"]
+
+
+def test_a_trendsetter_is_ranked_by_rate_not_by_count():
+    """Alice started twice as many words, out of nearly three times the talk."""
+    msgs = _chat(_filler("Alice", 300), _filler("Bob", 120),
+                 _catches_on("Alice", "yeeted", 120, ["Bob", "Dana", "Charlie"]),
+                 _catches_on("Alice", "sussy", 150, ["Bob", "Dana", "Charlie"]),
+                 _catches_on("Bob", "bussin", 180, ["Alice", "Dana", "Charlie"]))
+    trend = cs.trendsetters(msgs)
+    rows = {r["member"]: r for r in trend["members"]}
+    assert rows["Alice"]["words"] == 2
+    assert rows["Bob"]["words"] == 1
+    assert rows["Bob"]["per_1k"] > rows["Alice"]["per_1k"]
+    assert trend["members"][0]["member"] == "Bob"
+
+
+def test_a_member_who_barely_spoke_is_not_a_trendsetter():
+    msgs = _chat(_filler("Alice", 300),
+                 _catches_on("Dana", "yeeted", 120, ["Alice", "Bob", "Charlie"]))
+    trend = cs.trendsetters(msgs)
+    assert trend["words"][0]["member"] == "Dana"
+    assert trend["members"] == []
+
+
+def test_trendsetters_of_an_empty_chat_is_none():
+    assert cs.trendsetters([]) is None

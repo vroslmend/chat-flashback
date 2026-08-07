@@ -36,6 +36,23 @@ TURNOVER_MIN_USES = 5
 # 100% collapse and fills the page.
 DRIFT_MIN_INTERACTIONS = 100
 
+# Only words in this band can be coined. Nobody introduced "the", a word said
+# twice is a typo rather than a coinage, and the band is also what keeps the
+# sweep over a nine-year vocabulary down to the words that could plausibly
+# spread.
+TREND_MIN_USES = 20
+TREND_MAX_USES = 2000
+# Two people saying the same thing is a conversation. Three others picking it
+# up is the word getting into the chat's own vocabulary.
+TREND_MIN_ADOPTERS = 3
+# An export starting is not a word being coined: on day one every word is new,
+# so without this whoever talked most in the opening months "introduces"
+# thousands of words the chat had been saying for years.
+TREND_WARMUP_DAYS = 90
+# A rate needs a denominator worth dividing by, the same floor drift uses:
+# three lucky words out of forty messages is not a trendsetter.
+TREND_MIN_MESSAGES = 100
+
 
 # --------------------------------------------------------------------------- #
 # the group's own history                                                      #
@@ -626,4 +643,98 @@ def vocabulary_turnover(msgs, min_uses=TURNOVER_MIN_USES, top=15, names=()):
                  for y, v in born.items()},
         "died": {y: [{"word": w, "count": c} for c, w in sorted(v, reverse=True)[:top]]
                  for y, v in died.items()},
+    }
+
+
+# --------------------------------------------------------------------------- #
+# who starts the words                                                         #
+# --------------------------------------------------------------------------- #
+
+def trendsetters(msgs, band=None, min_adopters=TREND_MIN_ADOPTERS,
+                 warmup_days=TREND_WARMUP_DAYS, min_messages=TREND_MIN_MESSAGES,
+                 top=10, names=()):
+    """Who says a word first and then watches everybody else start saying it.
+
+    A different question from who talks most, so the words a member started are
+    divided by how much they say, the same per-1,000-messages convention the
+    word explorer and the relationships page use.
+
+    Two passes over the chat rather than one: the first counts every word, the
+    second records who said the banded ones first. One pass would mean holding
+    a first-use record for the whole vocabulary when only the few thousand
+    words in the band are ever read.
+    """
+    if not msgs:
+        return None
+    name_words = ac._member_name_words(msgs, names)
+    min_uses, max_uses = band or (TREND_MIN_USES, TREND_MAX_USES)
+
+    # Bots are left out of both passes. Meta AI's vocabulary is not the chat's,
+    # and crediting it with a word only takes the credit off a person.
+    totals = Counter()
+    said = Counter()
+    for m in msgs:
+        if ac.is_bot(m["sender"]):
+            continue
+        said[m["sender"]] += 1
+        for w in ac._vocab(m):
+            if len(w) > 2 and w not in ac.STOPWORDS and w not in name_words:
+                totals[w] += 1
+    in_band = {w for w, n in totals.items() if min_uses <= n <= max_uses}
+
+    # Messages are chronological, so the first time a member is seen saying a
+    # word is their first use of it.
+    first_use = defaultdict(dict)
+    for m in msgs:
+        if ac.is_bot(m["sender"]):
+            continue
+        for w in ac._vocab(m):
+            if w in in_band:
+                first_use[w].setdefault(m["sender"], m)
+
+    cutoff = msgs[0]["ts_ms"] + warmup_days * 86400 * 1000
+    coined = []
+    warmup_skipped = 0
+    for word, by_member in first_use.items():
+        order = sorted(by_member.values(), key=lambda m: m["ts_ms"])
+        if len(order) - 1 < min_adopters:
+            continue
+        origin = order[0]
+        if origin["ts_ms"] < cutoff:
+            warmup_skipped += 1
+            continue
+        coined.append({
+            "word": word, "member": origin["sender"], "uses": totals[word],
+            "first": origin["dt"].strftime("%Y-%m-%d"),
+            "adopters": len(order) - 1,
+            "days": ac._median(sorted((m["dt"] - origin["dt"]).days for m in order[1:])),
+        })
+
+    per_member = defaultdict(list)
+    for c in coined:
+        per_member[c["member"]].append(c)
+    members = []
+    for member, words in per_member.items():
+        if said[member] < min_messages:
+            continue
+        members.append({
+            "member": member, "words": len(words), "messages": said[member],
+            "per_1k": round(1000 * len(words) / said[member], 2),
+            "days": ac._median(sorted(w["days"] for w in words)),
+            "best": max(words, key=lambda w: (w["adopters"], w["uses"]))["word"],
+        })
+    # By the rate, not the count -- the whole point of the normalisation.
+    members.sort(key=lambda r: (-r["per_1k"], -r["words"], r["member"]))
+    coined.sort(key=lambda c: (-c["adopters"], -c["uses"], c["word"]))
+    return {
+        "members": members[:top],
+        "words": coined[:top],
+        "considered": len(in_band),
+        "adopted": len(coined),
+        "warmup_skipped": warmup_skipped,
+        "warmup_days": warmup_days,
+        "min_uses": min_uses,
+        "max_uses": max_uses,
+        "min_adopters": min_adopters,
+        "min_messages": min_messages,
     }

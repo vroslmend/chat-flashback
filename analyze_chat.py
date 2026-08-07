@@ -2699,7 +2699,8 @@ t.onclick=function(){{var dark=document.body.dataset.theme!=='dark';document.bod
 _NARRATIVE_PAGES = [("report.html", "Report"), ("year_in_review.html", "Years"),
                     ("group_history.html", "Group history"),
                     ("relationships.html", "Relationships"), ("eras.html", "Eras"),
-                    ("sessions.html", "Conversations"), ("quiz.html", "Quiz")]
+                    ("sessions.html", "Conversations"),
+                    ("trendsetters.html", "Trendsetters"), ("quiz.html", "Quiz")]
 
 
 def _narrative_page(title, current, heading, subtitle, body):
@@ -2945,6 +2946,50 @@ def _sessions_html(title, sess):
         f"{CONVERSATION_WINDOW_SECONDS // 60} minutes.", body)
 
 
+def _trend_days(value):
+    """A median wait, in the unit it reads in: same day, days, or months."""
+    if value is None:
+        return "-"
+    if value < 1:
+        return "same day"
+    if value < 60:
+        return f"{value:.0f} days"
+    return f"{value / 30.4:.0f} months"
+
+
+def _trendsetters_html(title, trend):
+    esc = html_lib.escape
+    leaders = _rows(["Member", "Words they started", "Their messages",
+                     "Per 1,000 messages", "Typical wait", "Most-adopted word"],
+                    [(esc(member_label(r["member"])), f"{r['words']:,}",
+                      f"{r['messages']:,}", f"{r['per_1k']}", _trend_days(r["days"]),
+                      esc(r["best"])) for r in trend["members"]])
+    words = _rows(["Word", "Started by", "First said", "Picked up by",
+                   "Typical wait", "Uses"],
+                  [(f"<b>{esc(w['word'])}</b>", esc(member_label(w["member"])),
+                    w["first"], f"{w['adopters']} others", _trend_days(w["days"]),
+                    f"{w['uses']:,}") for w in trend["words"]])
+    band = (f"<p class='muted'>Only words the chat used between {trend['min_uses']:,} "
+            f"and {trend['max_uses']:,} times, and only when at least "
+            f"{trend['min_adopters']} other members said them afterwards. A word first "
+            f"said in the chat's opening {trend['warmup_days']} days does not count as "
+            f"started: the export beginning is not the same as the word being new "
+            f"({trend['warmup_skipped']:,} left out that way).</p>")
+    rate = (f"<p class='muted'>Divided by how much each member says, so a chatty member "
+            f"cannot win on volume alone. Members under {trend['min_messages']:,} "
+            f"messages are left out, since a rate needs a denominator worth dividing "
+            f"by.</p>")
+    body = "".join([
+        _sec("who", "Who starts the words",
+             band + rate + (leaders or "<p>Nobody started a word that caught on.</p>")),
+        _sec("words", "The words that caught on",
+             words or "<p>No word in the band was picked up by enough members.</p>"),
+    ])
+    subtitle = (f"{trend['adopted']:,} of the {trend['considered']:,} words in the band "
+                f"were picked up by {trend['min_adopters']} members or more.")
+    return _narrative_page(title, "trendsetters.html", "Trendsetters", subtitle, body)
+
+
 def _quiz_html(title, questions):
     # `</script>` inside a message would close the tag early and drop the rest
     # of the quiz on the floor.
@@ -3019,6 +3064,10 @@ def write_narrative_pages(title, analyses, out_dir):
     if sess:
         (out_dir / "sessions.html").write_text(
             _sessions_html(title, sess), encoding="utf-8")
+    trend = analyses.get("trendsetters")
+    if trend:
+        (out_dir / "trendsetters.html").write_text(
+            _trendsetters_html(title, trend), encoding="utf-8")
     quiz = analyses.get("quiz")
     if quiz:
         (out_dir / "quiz.html").write_text(
@@ -3151,6 +3200,7 @@ NAV_LABELS = {
     "topics": "Topics", "jokes": "Jokes", "media": "Media", "speed": "Speed",
     "swear": "Swearing", "starters": "Starters", "ghosting": "Ghosting",
     "hourly": "Hours", "lengths": "Lengths", "domains": "Domains",
+    "trendsetters": "Trendsetters",
 }
 
 
@@ -3255,6 +3305,18 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
             rows.append(row)
         sections.append(_sec("pair_dynamics", "Pair dynamics",
                              _table(["Replier \\n Replied-to"] + [member_label(m) for m in pm["members"]], rows)))
+    trend = analyses.get("trendsetters")
+    if trend and trend["members"]:
+        rows = [(cell(r["member"]), f"{r['words']:,}", f"{r['per_1k']}",
+                 html_lib.escape(r["best"])) for r in trend["members"]]
+        sections.append(_sec("trendsetters", "Who starts the words",
+                             f"<p class='muted'>Words a member said first that at least "
+                             f"{trend['min_adopters']} others then picked up, per 1,000 "
+                             f"of their own messages so the loudest member does not win "
+                             f"by volume. <a href='trendsetters.html'>Full page</a>.</p>"
+                             + _table(["Member", "Words they started",
+                                       "Per 1,000 messages", "Most-adopted word"], rows)))
+
     conv = analyses.get("conversations")
     if conv and conv["starters"]:
         rows = [(cell(m), f"{c:,}") for m, c in conv["starters"].most_common(top)]
@@ -3411,7 +3473,10 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
     written = {"year_in_review.html": True,
                "group_history.html": bool(analyses.get("group_history")),
                "relationships.html": bool(analyses.get("relationships")),
-               "eras.html": bool(analyses.get("eras"))}
+               "eras.html": bool(analyses.get("eras")),
+               "sessions.html": bool(analyses.get("sessions")),
+               "trendsetters.html": bool(analyses.get("trendsetters")),
+               "quiz.html": bool(analyses.get("quiz"))}
     extra_pages = '<span class="pages">' + "".join(
         f'<a class="years" href="{href}">{label}</a>'
         for href, label in _NARRATIVE_PAGES
@@ -3650,6 +3715,9 @@ def write_summary_json(title, stats, analyses, out_dir, anonymized, dates, top=1
     if analyses.get("turnover"):
         payload["vocabulary_turnover"] = {"born": analyses["turnover"]["born"],
                                           "died": analyses["turnover"]["died"]}
+    if analyses.get("trendsetters"):
+        payload["trendsetters"] = {"members": analyses["trendsetters"]["members"],
+                                   "words": analyses["trendsetters"]["words"]}
     if analyses.get("member_profiles"):
         # The messages a member's most-reacted list holds are whole message
         # dicts; the JSON keeps the arc, not the message objects.
@@ -3834,7 +3902,9 @@ def process_thread(thread_dir, args):
         analyses["turnover"] = chatstats.vocabulary_turnover(msgs, names=names)
         analyses["member_profiles"] = chatstats.member_profiles(msgs, names=names)
         analyses["sessions"] = chatstats.sessions(msgs, top=args.top)
-        # Both render as narrative pages, so they skip together.
+        analyses["trendsetters"] = chatstats.trendsetters(
+            msgs, band=_parse_band(args.trend_band), names=names, top=args.top)
+        # All of these render as narrative pages, so they skip together.
         analyses["quiz"] = quiz_questions(msgs, analyses["personality"], names=names,
                                           top=args.top)
 
@@ -3870,6 +3940,23 @@ def _parse_skip(value):
         print(f"  [warn] unknown --skip value {unknown!r}; "
               f"known: {', '.join(SKIPPABLE)}")
     return names & set(SKIPPABLE)
+
+
+def _parse_band(value):
+    """--trend-band as (min uses, max uses), or None to keep the defaults.
+
+    Left to chatstats to fill in rather than defaulted here, so the band a run
+    used and the band the page explains cannot drift apart.
+    """
+    parts = [p.strip() for p in str(value or "").split(",") if p.strip()]
+    if len(parts) == 2 and all(p.isdigit() for p in parts):
+        low, high = int(parts[0]), int(parts[1])
+        if 0 < low <= high:
+            return low, high
+    if value:
+        print(f"  [warn] ignoring --trend-band {value!r}: expected two rising "
+              f"numbers, e.g. 20,2000")
+    return None
 
 
 def _slug(name):
@@ -4235,6 +4322,10 @@ def main(argv=None):
                              "export does not list, e.g. a deleted account that shows "
                              "as 'Facebook user'. Dropped from topic words and running "
                              "jokes, where a name would otherwise read as a topic")
+    parser.add_argument("--trend-band", default="",
+                        help="How often a word must be used to count as one somebody "
+                             "started, as min,max (default: 20,2000). Lower it on a "
+                             "small chat, where nothing reaches twenty uses")
     parser.add_argument("--stopwords-file", default="",
                         help="Extra stopwords to ignore in word stats, one per line "
                              "(# comments ignored). The built-in list is English only, "
