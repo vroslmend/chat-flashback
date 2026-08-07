@@ -39,6 +39,15 @@ Runs locally. Your data is not uploaded anywhere.
 - Eras. The chat cut into periods where its volume or its vocabulary turned over,
   each named for the word it uses most out of proportion, plus the words the chat
   picked up and stopped saying each year.
+- Conversations. The chat cut into conversations wherever nobody spoke for 30
+  minutes: who opens them, who has the last word, how long they actually run, the
+  longest one ever, and the chat's own longest silences with the message that
+  ended each.
+- Sleep schedules. Every member's posting hours, year by year rather than
+  averaged over all of them, so somebody's hours sliding later reads as a move
+  and their 3am tail vanishing reads as a job.
+- Guess who said this. A quiz built out of each member's signature words, so the
+  answer is gettable rather than a coin flip.
 - Message-length and word trends over time.
 - Sentiment (VADER). Average mood per member and per year.
 - Weirdest statements. All-caps, 3am, punctuation-spiral, and extreme-length messages.
@@ -119,9 +128,9 @@ Options:
 | `--check` | Validate the export instead of analyzing (always exits 0) |
 
 Writes `summary.md`, `report.html`, PNG charts, `year_<year>.html` year-in-review
-pages, `group_history.html`, `relationships.html`, `eras.html` and a
-`member_<name>.html` per member into `output/<thread>/`. Every page is linked from
-the report's top bar.
+pages, `group_history.html`, `relationships.html`, `eras.html`, `sessions.html`,
+`quiz.html` and a `member_<name>.html` per member into `output/<thread>/`. Every
+page is linked from the report's top bar.
 
 ### Config file
 
@@ -144,7 +153,7 @@ python analyze_chat.py --config config.json
 
 ### Group history, relationships and eras
 
-Three pages sit beside the report, plus one page per member.
+Five pages sit beside the report, plus one page per member.
 
 **Group history** reads back the messages Messenger writes about the group itself
 — renames, nicknames, joins and removals. They are dropped from the vocabulary
@@ -171,6 +180,21 @@ which is not the same as its most common word — on a real chat, tf-idf named f
 eras out of five after the chat's single commonest word. Underneath it, the words
 the chat first said and last said each year, which is the plainest version of the
 same story.
+
+**Conversations** splits the chat wherever nobody spoke for 30 minutes — the same
+gap the rest of the report uses, so the two cannot disagree about where a
+conversation ends. Openers and closers are given as a count and as a rate per 100
+of that member's own messages, because the count alone just ranks by who talks
+most; the rate is what separates someone who always speaks first from someone who
+is simply always there. Conversation length is reported as percentiles rather than
+an average, since the distribution runs from two-message exchanges to all-nighters
+and a mean describes neither. Underneath sits the inverse: the chat's longest
+silences, and the message that broke each one.
+
+**Quiz** is "guess who said this". A message only qualifies if it uses one of its
+sender's signature words, so the answer is gettable; messages that name somebody
+give it away and are left out, as are bots. It is seeded, so regenerating the
+report does not reshuffle the questions.
 
 ### Non-English chats
 
@@ -332,7 +356,7 @@ Sample output from the synthetic thread is in `examples/`:
 - `summary.json` - the report data as structured JSON
 - `year_in_review.html` and `year_<year>.html` - one page per year
 - PNG charts: messages per year, activity heatmap, pace trends, activity by
-  hour/weekday, top members, top words, word clouds, emoji timeline, yearly recap,
+  hour/weekday, hours by year, top members, top words, word clouds, emoji timeline, yearly recap,
   pair dynamics, hourly radar, reaction dynamics, question dynamics, topics per
   year, running jokes, response speed, swear stats, tracked terms, domains, media
   leaderboard, reply chains, ghosting, monologues, conversation starters, monthly
