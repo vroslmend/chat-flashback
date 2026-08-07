@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saturday Squad - guess who said this</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;padding:0 0 60px;color:#202124;background:#fff;line-height:1.5}
+[data-theme="dark"]{color:#e8e8e8;background:#17191f}
+.topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:8px 20px;background:#f7f8fa;border-bottom:1px solid #e3e5e8;flex-wrap:wrap}
+[data-theme="dark"] .topbar{background:#20242d;border-bottom:1px solid #2a2f3a}
+.brand{font-weight:700;font-size:15px}
+.topbar a{color:#5b8ff9;text-decoration:none;font-size:12px}
+main{max-width:860px;margin:0 auto;padding:0 20px}
+h1{font-size:26px;margin-bottom:4px}
+h2{font-size:20px;margin-top:36px;border-bottom:1px solid #e3e5e8;padding-bottom:6px}
+.muted{color:#777;font-size:13px}
+.cards{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
+.card{flex:1;min-width:120px;background:#f7f8fa;border:1px solid #e3e5e8;border-radius:12px;padding:14px}
+.card b{display:block;font-size:22px}
+.card span{font-size:12px;color:#777}
+[data-theme="dark"] .card{background:#20242d;border-color:#2a2f3a}
+[data-theme="dark"] .card span{color:#9aa0a6}
+[data-theme="dark"] h2{border-color:#2a2f3a}
+ul{margin:8px 0}
+li{margin:4px 0}
+img{max-width:100%;border-radius:10px;margin:6px 0}
+table{border-collapse:collapse;width:100%;margin:10px 0}
+th,td{border:1px solid #e3e5e8;padding:6px 10px;text-align:left;font-size:13px}
+[data-theme="dark"] th,[data-theme="dark"] td{border-color:#2a2f3a}
+#theme{border:1px solid #e3e5e8;background:#fff;color:#202124;border-radius:6px;padding:4px 10px;cursor:pointer;margin-left:auto}
+.quote{border-left:3px solid #e3e5e8;background:#f7f8fa;border-radius:4px;padding:6px 10px;margin:6px 0;font-size:13px}
+[data-theme="dark"] .quote{border-left-color:#2a2f3a;background:#20242d}
+</style>
+</head><body>
+<div class="topbar"><span class="brand">Saturday Squad flashback</span>
+<a href="report.html">Report</a><a href="year_in_review.html">Years</a><a href="group_history.html">Group history</a><a href="relationships.html">Relationships</a><a href="eras.html">Eras</a><a href="sessions.html">Conversations</a><a href="trendsetters.html">Trendsetters</a>
+<button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
+<main>
+<h1>Guess who said this</h1>
+<p class="muted">Every line below uses a word that gives its sender away. Press 1-4 or click.</p>
+<div id="quiz"></div>
+<p class="muted" id="score"></p>
+<style>
+#quiz .said{font-size:19px;margin:18px 0 22px;line-height:1.5}
+#quiz button{display:block;width:100%;text-align:left;margin:6px 0;padding:9px 13px;
+font:inherit;border:1px solid #e3e5e8;border-radius:8px;background:#f7f8fa;
+color:#202124;cursor:pointer}
+[data-theme="dark"] #quiz button{border-color:#2a2f3a;background:#20242d;color:#e8e8e8}
+#quiz button:hover:not(:disabled){border-color:#5b8ff9}
+#quiz button.right{border-color:#2ea169;background:rgba(46,161,105,.16)}
+#quiz button.wrong{border-color:#d1495b;background:rgba(209,73,91,.16)}
+</style>
+<script>
+var Q=[{"content": "bro you're setting up your own surprise party lmaooo", "answer": "Alice", "choices": ["Alice", "Dana", "Bob", "Charlie"], "date": "2022-05-10"}, {"content": "this group has become untrustworthy", "answer": "Bob", "choices": ["Dana", "Bob", "Alice", "Charlie"], "date": "2024-07-19"}, {"content": "the shawarma spot near the hotel though >>>>>", "answer": "Dana", "choices": ["Alice", "Charlie", "Dana", "Bob"], "date": "2019-10-06"}, {"content": "that shawarma was life-changing, not even joking", "answer": "Charlie", "choices": ["Charlie", "Alice", "Dana", "Bob"], "date": "2019-10-06"}, {"content": "TEN YEARS OF THIS CHAT. I can't believe it", "answer": "Alice", "choices": ["Alice", "Dana", "Charlie", "Bob"], "date": "2026-01-01"}, {"content": "trip was the best weekend of my life", "answer": "Bob", "choices": ["Bob", "Alice", "Dana", "Charlie"], "date": "2019-10-06"}, {"content": "nobody said full send", "answer": "Dana", "choices": ["Dana", "Bob", "Charlie", "Alice"], "date": "2022-05-10"}, {"content": "she said mid, im not going", "answer": "Charlie", "choices": ["Bob", "Alice", "Dana", "Charlie"], "date": "2024-07-19"}, {"content": "Happy new year lads!!", "answer": "Alice", "choices": ["Alice", "Charlie", "Dana", "Bob"], "date": "2017-01-01"}, {"content": "best ten years of my life", "answer": "Bob", "choices": ["Dana", "Charlie", "Bob", "Alice"], "date": "2026-01-01"}, {"content": "ive thought about that shawarma every week for 4 years", "answer": "Dana", "choices": ["Alice", "Charlie", "Bob", "Dana"], "date": "2023-12-21"}, {"content": "guys I got the job!!!", "answer": "Charlie", "choices": ["Dana", "Alice", "Bob", "Charlie"], "date": "2017-06-15"}, {"content": "wedding trip booked!! 3 months!!!", "answer": "Alice", "choices": ["Bob", "Alice", "Charlie", "Dana"], "date": "2019-04-12"}, {"content": "happy new year! we actually meet this time pls", "answer": "Bob", "choices": ["Alice", "Bob", "Dana", "Charlie"], "date": "2017-01-01"}, {"content": "the trip is happening. Book your flights this week.", "answer": "Dana", "choices": ["Alice", "Bob", "Dana", "Charlie"], "date": "2025-08-09"}, {"content": "happy valentine's to the only people i love", "answer": "Charlie", "choices": ["Charlie", "Bob", "Alice", "Dana"], "date": "2024-02-14"}, {"content": "lockdown means group call every night now. i've decided.", "answer": "Alice", "choices": ["Dana", "Alice", "Charlie", "Bob"], "date": "2020-03-15"}, {"content": "saturday 6pm usual spot. dont be late", "answer": "Bob", "choices": ["Alice", "Charlie", "Bob", "Dana"], "date": "2017-01-15"}, {"content": "oh this group chat is about to get very quiet", "answer": "Dana", "choices": ["Dana", "Charlie", "Bob", "Alice"], "date": "2021-12-01"}, {"content": "we need to go back just for that shawarma", "answer": "Alice", "choices": ["Dana", "Alice", "Bob", "Charlie"], "date": "2019-10-06"}], at=0, hits=0, done=false;
+var box=document.getElementById('quiz'), score=document.getElementById('score');
+function draw(){
+  if(at>=Q.length){box.innerHTML='<p class="said">That is all '+Q.length+' of them.</p>';
+    score.textContent='Final score: '+hits+' / '+Q.length;return;}
+  var q=Q[at];done=false;
+  var html='<p class="muted">'+(at+1)+' of '+Q.length+' &middot; '+q.date+'</p>'+
+           '<div class="said"></div>';
+  q.choices.forEach(function(c,i){
+    html+='<button data-i="'+i+'"><b>'+(i+1)+'</b> &nbsp;</button>';});
+  box.innerHTML=html;
+  // Names and message text are set as text, never parsed as markup.
+  box.querySelector('.said').textContent='\u201c'+q.content+'\u201d';
+  Array.prototype.forEach.call(box.querySelectorAll('button'),function(b,i){
+    b.appendChild(document.createTextNode(q.choices[i]));
+    b.onclick=function(){pick(i);};});
+  score.textContent=hits+' / '+at+' so far';
+}
+function pick(i){
+  if(done)return;done=true;
+  var q=Q[at],right=q.choices[i]===q.answer;
+  if(right)hits++;
+  Array.prototype.forEach.call(box.querySelectorAll('button'),function(b,j){
+    b.disabled=true;
+    if(q.choices[j]===q.answer)b.className='right';
+    else if(j===i)b.className='wrong';});
+  setTimeout(function(){at++;draw();},right?650:1500);
+}
+document.addEventListener('keydown',function(e){
+  var n=parseInt(e.key,10);if(n>=1&&n<=4)pick(n-1);});
+draw();
+</script>
+</main>
+<script>
+var t=document.getElementById('theme');
+t.onclick=function(){var dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';t.textContent=dark?'Light':'Dark';};
+</script>
+</body></html>
