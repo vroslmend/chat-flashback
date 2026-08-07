@@ -1,144 +1,213 @@
 # chat-flashback
 
-Analyzes a Facebook Messenger export and generates reports about a group chat:
-yearly recaps, member personalities, reaction dynamics, response-speed leaderboards,
-swear-word stats, custom term tracking, conversation starters, reply chains, ghosting
-stats, sentiment, word clouds, and a weirdest statements section. Also ships a local
-web UI to read the chat like a messaging app.
+Turns a Facebook Messenger export into a set of reports, charts and web pages, plus a
+local reader that lets you scroll the whole chat like a messaging app.
 
-Runs locally. Your data is not uploaded anywhere.
+Everything runs on your machine. Nothing is uploaded anywhere.
 
-## Features
+![The chat reader](examples/screenshot_reader.png)
 
-- Yearly recaps. Top member, top word, record day per year.
-- Member personalities. Signature words, emojis, peak posting hour, night-owl percentage.
-- Reaction dynamics. Most-reacted messages, reactor rankings.
-- Response-speed leaderboard. Median time to reply per member, plus the share of
-  each member's turns that got no reply within an hour.
-- Swear-word analytics. Per-member counts and signature swear words.
-- Custom term tracking. Count and chart any words or phrases with `--track` or `--track-file`.
-- Conversation starters. Sessions split on 30-minute gaps, longest single back-and-forth.
-- Reply chains. Longest reply chains reconstructed from `reply_to_message_id`.
-- Ghosting stats. Longest silence between each member's own messages.
-- Activity heatmap. GitHub-style calendar grid plus pace trends (messages/day, calls, media).
-- Pair dynamics. Heatmaps of who replies to whom and who reacts to whose messages.
-- Hourly radar profiles. Each member's 24-hour activity shape.
-- Word clouds. Overall and for the six busiest members, generated with `wordcloud`.
-- Monologues and unsent messages. Longest solo runs ("could've been an email") and `is_unsent`.
-- Emoji report. Emoji counts per member and a timeline of favorite emojis over the years.
-- Question dynamics. Who asks questions, who answers, who gets left on read, answer speed.
-- What the chat was about. TF-IDF topic words per year.
-- Running jokes. Repeated phrases that look like inside jokes (frequency, members, years).
-- Year in review. A page per year (monthly activity, top words/emojis, jokes) plus an index.
-- Group history. Every name the group gave itself and every nickname it gave its
-  members, as dated ranges, read back out of Messenger's own event messages.
-- Member pages. One per member: their years, the words that set each of their years
-  apart from their own others, who they answer, and their most-reacted messages.
-- Relationships. Pairs by year, pairs that drifted, who speaks first after a day of
-  silence, who gets the last word, and who goes unanswered most.
-- Eras. The chat cut into periods where its volume or its vocabulary turned over,
-  each named for the word it uses most out of proportion, plus the words the chat
-  picked up and stopped saying each year.
-- Conversations. The chat cut into conversations wherever nobody spoke for 30
-  minutes: who opens them, who has the last word, how long they actually run, the
-  longest one ever, and the chat's own longest silences with the message that
-  ended each.
-- Trendsetters. Who says a word first and then watches everybody else start
-  saying it, scored per 1,000 of their own messages so the loudest member does
-  not win by volume.
-- Sleep schedules. Every member's posting hours, year by year rather than
-  averaged over all of them, so somebody's hours sliding later reads as a move
-  and their 3am tail vanishing reads as a job.
-- Guess who said this. A quiz built out of each member's signature words, so the
-  answer is gettable rather than a coin flip.
-- Message-length and word trends over time.
-- Sentiment (VADER). Average mood per member and per year.
-- Weirdest statements. All-caps, 3am, punctuation-spiral, and extreme-length messages.
-- Media leaderboard. Photos, stickers, GIFs, videos, audio, and file attachments per member.
-- Handles newer-format export fields: `gifs`, `videos`, `audio_files`, `files`, `polls`,
-  and `is_taken_down`, and de-duplicates messages that appear in multiple files.
-- `--check`. Validate an export before analyzing: unknown message types/keys, empty
-  messages, media files missing on disk, duplicate messages, and gaps between files.
-- Copy-paste floods handled. Vocabulary counts each word or emoji at most three
-  times per message, so one pasted wall of the same word cannot decide the top
-  words, the topics of a year, or somebody's signature word. Volume stats still
-  count every keystroke, and the totals report how many floods there were.
-- Bots flagged. Members that are obviously software (`Meta AI`) are labelled
-  `(bot)` and kept out of the human awards: fastest replier, best vibes, and the
-  weirdest-statements reel.
-- Self-contained `report.html` with every table and chart from `summary.md`
-  embedded (share one file). Sticky nav, dark/light toggle, and filterable,
-  sortable tables.
-- Local chat reader (`--serve`). Browse the chat in a Messenger-style web UI, with
-  "on this day" nostalgia, random memories, regex search, and a theme toggle.
-- Word explorer in the reader. Look up any word, phrase or emoji and get who says
-  it, how often per 1,000 messages, when it started, who picked it up from whom,
-  the words it keeps company with, and real messages you can jump straight to.
-- `--anonymize`. Replaces names with Person A, Person B in all output.
-- `--tz`, `--config`, `--progress`, and `--incremental` for timezones, config files,
-  progress output, and skipping unchanged threads.
-- Supports group and 1-on-1 chats. Detects multiple threads in one export.
+## Contents
 
-## Requirements
+- [Quick start](#quick-start)
+- [What you get](#what-you-get)
+- [Options](#options)
+- [Common tasks](#common-tasks)
+- [The chat reader](#the-chat-reader)
+- [How the harder numbers are worked out](#how-the-harder-numbers-are-worked-out)
+- [Privacy](#privacy)
+- [Examples and sample data](#examples-and-sample-data)
+- [Tests](#tests)
 
-Python 3.8+.
+## Quick start
+
+Four steps. You need Python 3.8 or newer.
+
+**1. Install**
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Or install as a package, which gives you a `chatflashback` command:
+Or install it as a package, which gives you a `chatflashback` command:
 
 ```bash
 pip install .
-chatflashback --input data --output output
 ```
 
-Optional extras that the tool skips gracefully if missing:
-- `vaderSentiment` powers sentiment (English-only, may be noisy on mixed-language chats).
-- `wordcloud` powers the word clouds.
+Two optional extras add features. Without them the tool skips those sections and
+keeps going.
 
-Install both with `pip install ".[full]"`.
+```bash
+pip install ".[full]"   # vaderSentiment for mood, wordcloud for word clouds
+```
 
-## Usage
+**2. Download your Messenger data**
+
+1. Facebook Settings, then Your information, then Download your information.
+2. Select Messages and the chats you want.
+3. Set the format to JSON and the media quality to Low.
+4. Download the zip and extract it.
+
+The folder you want holds `message_1.json`, `message_2.json` and so on. It sits at
+`youraccount_.../your_activity_across_facebook/messages/inbox/<thread>/`.
+
+**3. Run it**
 
 ```bash
 python analyze_chat.py --input data --output output
 ```
 
-Options:
+Point `--input` at one thread folder, or at the whole `messages/inbox/` folder to do
+every thread in one go.
 
-| Flag | Description |
+**4. Open the report**
+
+Open `output/<thread>/report.html` in a browser. It is one self-contained file with
+every table and chart in it, so you can send it to somebody as is. The other pages
+sit next to it and are linked from the bar across the top.
+
+To read the chat itself instead:
+
+```bash
+python analyze_chat.py --input data --serve
+```
+
+That starts a reader on `http://127.0.0.1:8080`.
+
+## What you get
+
+Running the tool writes everything into `output/<thread>/`.
+
+### The report
+
+`report.html` and `summary.md` hold the same numbers, one as a web page and one as
+plain text. Add `--json` to also get `summary.json`.
+
+Inside: yearly recaps with the top member, word and record day of each year. Member
+personalities with signature words, favourite emojis, peak hour and night-owl share.
+Reaction dynamics. A response-speed leaderboard with median reply time and the share
+of each member's turns that nobody answered. Swear-word counts per member. Who starts
+conversations, who ghosts, who monologues. Question dynamics: who asks, who answers,
+who gets left on read. Emoji counts and a timeline of favourite emojis. Topic words
+per year. Repeated phrases that look like inside jokes. Message-length and word trends
+over time. Mood per member and per year, if `vaderSentiment` is installed. A weirdest
+statements reel of all-caps, 3am and punctuation-spiral messages. A media leaderboard
+for photos, stickers, GIFs, videos, audio and files.
+
+Around 40 PNG charts come with it, including a GitHub-style activity heatmap, pair
+matrices of who replies to and reacts to whom, hourly radars, word clouds and a
+sleep-schedule grid of everyone's posting hours year by year.
+
+### The pages beside the report
+
+| Page | What is on it |
 |---|---|
-| `--input, -i` | Path to a thread folder or an export `messages/` folder (default: `data/`) |
-| `--output, -o` | Output folder for charts and `summary.md` (default: `output/`) |
-| `--anonymize` | Replace member names with Person A, Person B in all output |
-| `--track` | Comma-separated words or phrases to count, e.g. `--track "lol, bro"` |
-| `--track-file` | File with tracked terms, one per line (`#` comments and blank lines ignored) |
-| `--names` | Names of people the export doesn't list (e.g. a deleted account shown as "Facebook user"), so they don't read as topic words |
-| `--stopwords-file` | Extra stopwords to ignore in word stats, one per line (the built-in list is English only) |
-| `--year` | Analyze only one year, e.g. `--year 2017` |
-| `--top` | Number of entries in leaderboards and charts (default: 10) |
-| `--trend-band` | How often a word must be used to count as one somebody started, as `min,max` (default: `20,2000`). Lower it on a small chat, where nothing reaches twenty uses |
-| `--json` | Also write `summary.json` with the report data as structured JSON |
-| `--serve` | Start the local chat reader web UI instead of writing reports |
+| `year_in_review.html` | An index, plus `year_<year>.html` for every year |
+| `group_history.html` | Every name the group gave itself and every nickname, as dated ranges |
+| `member_<name>.html` | One per member: their years, their words, who they answer, their most-reacted messages |
+| `relationships.html` | Pairs by year, pairs that drifted apart, who breaks the silence, who gets the last word |
+| `eras.html` | The chat cut into periods, each named after the word it made its own |
+| `sessions.html` | Conversations: who opens them, who ends them, how long they run, the longest silences |
+| `trendsetters.html` | Who says a word first and then watches everybody else start saying it |
+| `quiz.html` | Guess who said this, built from each member's signature words |
+
+### The reader
+
+`--serve` opens a Messenger-style reader on localhost:
+
+- Infinite-scroll feed grouped by day, newest or oldest first
+- Sender colours, inline reactions, reply threading and "N years ago" badges
+- Photo and GIF thumbnails, inline video and audio players, download links for files
+- Search across every message, with a `.*` regex toggle and per-member filters
+- Jump to a date, an "On this day" view across the years, and a "Surprise me" button
+- A word explorer behind the Words button
+- A light and dark toggle that is remembered between visits
+
+### Handling of awkward exports
+
+Newer export fields (`gifs`, `videos`, `audio_files`, `files`, `polls`, `is_taken_down`)
+are read, and messages that appear in more than one file are de-duplicated.
+
+Copy-paste floods are capped. Each word or emoji counts at most three times per
+message, so one pasted wall of the same word cannot decide the top words or what a
+year was about. Volume stats still count every keystroke, and the totals say how many
+floods there were.
+
+Members that are obviously software, such as `Meta AI`, are labelled `(bot)` and kept
+out of the human awards.
+
+## Options
+
+| Flag | What it does |
+|---|---|
+| `--input`, `-i` | A thread folder or an export `messages/` folder (default: `data/`) |
+| `--output`, `-o` | Where to write everything (default: `output/`) |
+| `--anonymize` | Replace names with Person A, Person B everywhere, including inside quoted messages |
+| `--track` | Words or phrases to count and chart, e.g. `--track "lol, bro"` |
+| `--track-file` | The same, from a file, one per line (`#` for comments) |
+| `--names` | Names the export does not list, such as a deleted account showing as "Facebook user", so they do not read as topic words |
+| `--stopwords-file` | Extra words to ignore, one per line. The built-in list is English only |
+| `--year` | Analyze one year only, e.g. `--year 2017` |
+| `--top` | How many rows in each leaderboard (default: 10) |
+| `--trend-band` | How often a word must be used to count as one somebody started, as `min,max` (default: `20,2000`) |
+| `--json` | Also write `summary.json` |
+| `--serve` | Start the reader instead of writing reports |
 | `--port` | Port for `--serve` (default: 8080) |
-| `--no-index` | Skip the word-search index when serving. Starts instantly from the reader store and skips parsing entirely; the word explorer is unavailable |
-| `--tz` | Timezone for analysis, e.g. `+03:00` or `America/New_York` (Messenger timestamps are UTC; default is your system timezone) |
-| `--config` | JSON config file with any of the options above |
-| `--skip` | Skip analyses: `jokes`, `sentiment`, `wordcloud`, `topics`, `narratives` (comma-separated) |
-| `--progress` | Show phase progress while analyzing |
-| `--incremental` | Skip threads that are unchanged since the last run |
-| `--check` | Validate the export instead of analyzing (always exits 0) |
+| `--no-index` | Skip the word index when serving. Starts instantly, but the word explorer is off |
+| `--tz` | Timezone, e.g. `+03:00` or `America/New_York`. Messenger timestamps are UTC and the default is your system timezone |
+| `--config` | A JSON file holding any of these options |
+| `--skip` | Skip analyses: `jokes`, `sentiment`, `wordcloud`, `topics`, `narratives` |
+| `--progress` | Print which phase is running |
+| `--incremental` | Skip threads that have not changed since the last run |
+| `--check` | Validate the export instead of analyzing it |
 
-Writes `summary.md`, `report.html`, PNG charts, `year_<year>.html` year-in-review
-pages, `group_history.html`, `relationships.html`, `eras.html`, `sessions.html`,
-`trendsetters.html`, `quiz.html` and a `member_<name>.html` per member into
-`output/<thread>/`. Every page is linked from the report's top bar.
+## Common tasks
 
-### Config file
+### Share a report without real names
 
-Pass options in a JSON file instead of on the command line. CLI flags still win.
+```bash
+python analyze_chat.py --input data --anonymize
+```
+
+Names become Person A, Person B in every chart, table and quoted message.
+
+### Chats that mix languages
+
+The built-in stopword list is English only. In a chat that mixes languages, the other
+language's function words take over the top-word, topic and inside-joke sections.
+A Hinglish list ships with the tool:
+
+```bash
+python analyze_chat.py --input data --stopwords-file stopwords/hinglish.txt
+```
+
+Any file works: one word per line, `#` for comments. Chat spelling is not standard, so
+a word usually needs several entries (`mein`, `mei`, `mai`) before it stops showing up.
+
+### Very large chats
+
+The analysis holds everything in memory, so a chat with hundreds of thousands of
+messages needs headroom. Two phases dominate. Inside jokes counts every 2 to 4 word
+phrase and drives peak memory. Sentiment is the slowest. Drop both if a run is too
+heavy:
+
+```bash
+python analyze_chat.py --input data --skip jokes,sentiment
+```
+
+Every other report, chart and page is still written.
+
+### Count your own words
+
+```bash
+python analyze_chat.py --input data --track "shawarma, bro"
+```
+
+Each term gets a row in the report and a line on a chart. `--track-file` reads a longer
+list from a file.
+
+### Use a config file instead of flags
 
 ```json
 {
@@ -146,7 +215,6 @@ Pass options in a JSON file instead of on the command line. CLI flags still win.
   "output": "out",
   "top": 15,
   "json": true,
-  "anonymize": false,
   "track": "lol, bro"
 }
 ```
@@ -155,251 +223,199 @@ Pass options in a JSON file instead of on the command line. CLI flags still win.
 python analyze_chat.py --config config.json
 ```
 
-### Group history, relationships and eras
+Flags on the command line still win over the file.
 
-Six pages sit beside the report, plus one page per member.
+### Re-run without redoing everything
 
-**Group history** reads back the messages Messenger writes about the group itself
-— renames, nicknames, joins and removals. They are dropped from the vocabulary
-(otherwise "named the group" ranks as a running joke said by everyone for years),
-but they are a record nobody has read: on a nine-year chat, 520 group names and
-369 nickname changes. Nicknames are shown as dated ranges, because the question
-people ask is what someone was called in 2021, not when a name was set.
+`--incremental` stores a fingerprint of each thread (file names, sizes, modification
+times) in `output/.chatflashback_state.json` and skips threads that have not changed.
+Changing a flag such as `--year` or `--top` forces a re-run.
 
-**Relationships** counts a pair's interactions — a reply inside the hour, or a
-reaction — per year, and flags a pair as drifted when its share of either
-member's own interaction moves by more than half between the pair's peak year and
-the most recent year the export covers end to end. The share is what makes it
-drift rather than the chat simply going quiet. It also reports who speaks first
-after a day of silence, who gets the last word, and whose messages go unanswered,
-as a share of their own messages so the loudest member does not win by volume.
-
-**Eras** cuts the chat into periods. The rule: a month opens a new era when the
-three months from it carry less than half or more than double the messages of the
-three before it, or when fewer than a third of the previous quarter's top words
-survive into this one. Quarters too small to have a character of their own cannot
-open an era, and eras shorter than six months are merged into their neighbour. An
-era is named for the word it uses most out of proportion to the rest of the chat,
-which is not the same as its most common word — on a real chat, tf-idf named four
-eras out of five after the chat's single commonest word. Underneath it, the words
-the chat first said and last said each year, which is the plainest version of the
-same story.
-
-**Conversations** splits the chat wherever nobody spoke for 30 minutes — the same
-gap the rest of the report uses, so the two cannot disagree about where a
-conversation ends. Openers and closers are given as a count and as a rate per 100
-of that member's own messages, because the count alone just ranks by who talks
-most; the rate is what separates someone who always speaks first from someone who
-is simply always there. Conversation length is reported as percentiles rather than
-an average, since the distribution runs from two-message exchanges to all-nighters
-and a mean describes neither. Underneath sits the inverse: the chat's longest
-silences, and the message that broke each one.
-
-**Trendsetters** asks who introduces vocabulary that other people actually
-adopt, which is not the same question as who talks most. For every word the
-chat used between 20 and 2,000 times — nobody coined "the", and a word said
-twice is a typo — it takes whoever said it first, and counts the word as having
-caught on only once at least three other members said it too. Three things keep
-the answer honest. A word first said in the chat's opening 90 days does not
-count, because an export beginning is not a word being new and otherwise
-whoever talked most in month one "starts" thousands of words the chat had been
-saying for years. Bots are left out, since Meta AI's vocabulary is not the
-chat's. And the count is divided by how much each member says, per 1,000 of
-their own messages, so a chatty member cannot win on volume alone — which means
-members under 100 messages are left out, a rate needing a denominator worth
-dividing by. Use `--trend-band` to lower the band on a chat too small for twenty
-uses; the words still show even when nobody clears the leaderboard's floor.
-
-**Quiz** is "guess who said this". A message only qualifies if it uses one of its
-sender's signature words, so the answer is gettable; messages that name somebody
-give it away and are left out, as are bots. It is seeded, so regenerating the
-report does not reshuffle the questions.
-
-### Non-English chats
-
-The built-in stopword list is English only, so in a chat that mixes languages the
-other language's function words take over the top-word, topic and running-joke
-sections. `stopwords/hinglish.txt` ships with common Urdu/Hindi words as typed in
-Latin script:
-
-```bash
-python analyze_chat.py --input data --stopwords-file stopwords/hinglish.txt
-```
-
-Any file works: one word per line, `#` for comments. Chat spelling is not
-standard, so a word usually needs several entries (`mein`, `mei`, `mai`) before
-it stops showing up in the results.
-
-### Very large chats
-
-Everything is held in memory, so a chat with hundreds of thousands of messages
-needs headroom. Two analyses dominate: running jokes counts every 2-4 word
-phrase in the chat and drives peak memory, and sentiment is the slowest phase.
-Drop them if a run is too heavy:
-
-```bash
-python analyze_chat.py --input data --skip jokes,sentiment
-```
-
-Every other report, chart and page is still produced; only those sections are
-left out.
-
-### Incremental runs
-
-`--incremental` records a fingerprint (file names, sizes, mtimes) for each thread in
-`output/.chatflashback_state.json` and skips threads that have not changed since the
-last run. Changing flags like `--year` or `--top` forces a re-run.
-
-### Validating an export
-
-Before analyzing a fresh download, run `--check` to surface anything the tool may not
-handle yet and to find broken attachments:
+### Check an export before analyzing it
 
 ```bash
 python analyze_chat.py --input data --check
 ```
 
-It reports, per thread: message types, unknown `type` values and unknown top-level
-message keys (so new export formats are easy to spot), empty messages, media
-attachments that are missing on disk, duplicate messages (it de-duplicates them
-automatically when analyzing), and gaps over 90 days between message files. Add
-`--json` to also write `check.json`. `--check` always exits 0 and never analyzes.
+Per thread, it reports message types, unknown `type` values and unknown message keys
+so a new export format is easy to spot, plus empty messages, attachments missing from
+disk, duplicate messages and gaps of over 90 days between message files. Add `--json`
+to also write `check.json`. It never analyzes and always exits 0.
 
-## Chat reader
+## The chat reader
 
 ```bash
 python analyze_chat.py --input <thread> --serve
 ```
 
-Starts a local server on `127.0.0.1:8080` (localhost only, no authentication) and
-opens a Messenger-style reader:
-
-- Infinite-scroll feed grouped by day, newest or oldest first
-- Sender color chips, inline reactions, media thumbnails, shares and call messages
-- Photo/GIF thumbnails, inline video and audio players, and download links for files.
-  Media that is not on disk says so in place of the thumbnail, rather than leaving a
-  blank message — most exports ship with only a fraction of their attachments
-- Reply threading, "N years ago" badges, subtle sentiment tint
-- Full-text search (with a `.*` regex toggle) and per-member filters
-- A jump-to-date control, an "On this day" view across the years, and a random-memory
-  "Surprise me" button
-- A light/dark theme toggle (remembered between visits)
-- The word explorer, behind the "Words" button
-- Links to the full report and the year-in-review pages
+The server listens on `127.0.0.1` only, with no authentication, so it is not reachable
+from your network.
 
 ### Word explorer
 
-Type a word into the panel behind the reader's "Words" button and it comes back
-with the whole life of that word in the chat: total uses and how many messages
-they land in, a per-member table with a per-1,000-messages rate so a quiet member
-who says it constantly is not buried under a chatty one, the year it peaked, how
-often it is sent on its own, whether it pulls more reactions than the chat's
-average, who said it first and how many days everyone else took to pick it up,
-the words that sit beside it more often than chance predicts, and example
-messages with a button that jumps the feed to that moment.
+![The word explorer](examples/screenshot_word_explorer.png)
 
-Matching is exact: `bruh` does not silently include `bruhh`. Other spellings that
-differ only in held-down letters are listed separately, and "count spellings
-together" folds them into the totals. Autocomplete suggests words by how often
-they are used.
+Type a word into the panel behind the Words button. You get total uses and how many
+messages they land in, a per-member table with a per-1,000-messages rate so a quiet
+member who says it constantly is not buried under a chatty one, the year it peaked,
+how often it is sent on its own, whether it pulls more reactions than average, who
+said it first and how long everybody else took to pick it up, the words that sit
+beside it more often than chance predicts, and example messages with a button that
+jumps the feed to that moment.
 
-Type more than one word and it becomes a phrase, counted only where those words
-sit side by side — `full send` ignores "send me the full list". Emoji are indexed
-as words, so `😂` works the same way, and so does `😂😂` or `lol 😂`. Punctuation
-and capitals are ignored, and a phrase may be built entirely out of stopwords
-(`the end` is a fair question even though `the` is not).
+Matching is exact. `bruh` does not quietly include `bruhh`. Spellings that differ only
+in held-down letters are listed separately, and a "count spellings together" box folds
+them into the totals. Autocomplete suggests words by how often they are used.
 
-"Show all N in the feed" turns the reader into every message holding that word,
-oldest first, grouped by day. Click any one of them and the feed opens the whole
-conversation around it, so you can read what the word was actually about.
+Type more than one word and it becomes a phrase, counted only where those words sit
+side by side, so `full send` ignores "send me the full list". Emoji are indexed as
+words, so `😂`, `😂😂` and `lol 😂` all work. Punctuation and capitals are ignored, and
+a phrase can be made entirely of stopwords (`the end` is a fair question even though
+`the` is not).
 
-The index is built once at startup and lives in memory. On a 1.79M-message chat
-it takes about 30 seconds and peaks near 180 MB while building, for 140,755
-distinct words. A lookup then takes milliseconds for an ordinary word, and up to
-about 3 seconds for one of the most common words in the chat, since every
-statistic is computed on demand over the messages that matched. Phrases need no
-index of their own — the candidate messages are the ones containing every word,
-so `in the` came back in 1.0 s and `what the hell` in 0.04 s on the same chat.
-Pass `--no-index` to skip the build if you only want to read.
+"Show all N in the feed" turns the reader into every message holding that word, oldest
+first. Click one and the feed opens the conversation around it.
 
-### The reader's store
+The index is built at startup and kept in memory. On a 1.79M-message chat that takes
+about 30 seconds and peaks near 180 MB while building, for 140,755 distinct words. A
+lookup then takes milliseconds for an ordinary word and up to about 3 seconds for one
+of the most common ones, since every statistic is computed on demand over the messages
+that matched. Phrases need no index of their own, so `in the` came back in 1.0 s and
+`what the hell` in 0.04 s on the same chat. Pass `--no-index` to skip the build if you
+only want to read.
 
-The reader keeps the parsed messages in a SQLite file at
-`output/.reader/<thread>.sqlite3` and answers the feed, the date jump, "on this
-day", the random memory and search out of it. The file is keyed on the same
-fingerprint `--incremental` uses, plus `--tz` and `--anonymize`, since both
-change what gets stored; anything else rebuilds it.
+### Where the reader keeps its data
 
-The practical effect is on the second start. With `--no-index` the export is not
-parsed at all — the reader opens the file and serves. Without it, the messages
-are still parsed because the word explorer needs them in memory. A stale or
-half-written file is rebuilt rather than trusted: the "complete" marker is
-written last, so a run interrupted mid-build leaves a file that fails its own
-check.
+Parsed messages go into a SQLite file at `output/.reader/<thread>.sqlite3`, which
+answers the feed, the date jump, "on this day", the random memory and search. The file
+is keyed on the same fingerprint `--incremental` uses, plus `--tz` and `--anonymize`,
+since both change what gets stored. Anything else rebuilds it.
 
-Search stays a substring scan, now inside SQLite, and still reports the true
-match count and shows the first page of hits. It is deliberately not a full-text
-index: FTS5 matches whole tokens, so searching `tube` would stop finding
-`youtube.com` — on a 500k-row benchmark that is 0 hits against 358,453. The scan
-costs roughly 60 ms per 500k messages, which is not worth breaking search for.
+The difference shows on the second start. With `--no-index` the export is not parsed at
+all: the reader opens the file and serves. Without it, the messages are parsed anyway
+because the word explorer needs them in memory. A half-written file is rebuilt rather
+than trusted, because the "complete" marker is written last.
 
-Media files are served from the export folder only; paths are resolved inside the
-thread directory so nothing outside it can be read, and files are streamed with
-`Range` support so video and audio can seek. Anything that is not an image, video
-or audio downloads rather than rendering, since an export can contain `.html` or
-`.svg` attachments.
+Search is a substring scan running inside SQLite, and reports the true match count
+along with the first page of hits. It is deliberately not a full-text index: FTS5
+matches whole tokens, so searching `tube` would stop finding `youtube.com`. On a
+500k-row benchmark that is 0 hits against 358,453. The scan costs roughly 60 ms per
+500k messages.
 
-Text that comes from the export — thread titles, names, message bodies — is
-escaped everywhere it is rendered, in the reader and in the generated reports.
+Media is served from the export folder only. Paths are resolved inside the thread
+directory so nothing outside it can be read, and files stream with `Range` support so
+video and audio can seek. Anything that is not an image, video or audio downloads
+rather than rendering, since an export can contain `.html` or `.svg` attachments.
 
-## Getting your Messenger data
+## How the harder numbers are worked out
 
-1. Facebook Settings > Your information > Download your information.
-2. Select Messages and the chats you want.
-3. Set format to JSON and media quality to Low.
-4. Download and extract. Point `--input` at:
-   `youraccount_.../your_activity_across_facebook/messages/inbox/<thread>/`
+Most of the report is a straight count. These are the ones with a rule behind them.
 
-A thread folder contains `message_1.json`, `message_2.json`, ... that you can point
-`--input` at directly.
+### Eras
+
+A month opens a new era when the three months from it carry less than half or more
+than double the messages of the three before it, or when fewer than a third of the
+previous quarter's top words survive into this one. Quarters too small to have a
+character of their own cannot open an era, and eras shorter than six months are merged
+into their neighbour.
+
+Each era is named after the word it uses most out of proportion to the rest of the
+chat, which is not its most common word. TF-IDF was tried first and named four eras out
+of five after the chat's single commonest word.
+
+Underneath sits the plainest version of the same story: the words the chat first said
+and last said in each year.
+
+### Relationships
+
+A pair interacts when one answers the other within an hour, or reacts to their message.
+Those are counted per year.
+
+A pair has drifted when its share of either member's own interaction moves by more than
+half between the pair's peak year and the most recent year the export covers end to
+end. Using the share, rather than the raw count, stops a pair reading as drifted when
+the whole chat simply went quiet. Pairs under 100 interactions in their peak year are
+left out.
+
+The page also reports who speaks first after a day of silence, who gets the last word,
+and whose messages go unanswered, as a share of their own messages so the loudest
+member does not top the list by volume.
+
+### Conversations
+
+The chat is cut wherever nobody spoke for 30 minutes, the same gap the rest of the
+report uses.
+
+Openers and closers are given as a count and as a rate per 100 of that member's own
+messages. The count alone just ranks by who talks most; the rate separates someone who
+always speaks first from someone who is always there.
+
+Conversation length is given as percentiles rather than an average, because the range
+runs from two-message exchanges to all-nighters. Underneath sits the inverse: the
+chat's longest silences and the message that broke each one.
+
+### Trendsetters
+
+Who introduces vocabulary that other people actually adopt, which is a different
+question from who talks most.
+
+For every word the chat used between 20 and 2,000 times, the tool takes whoever said it
+first. The word counts as having caught on only once at least three other members said
+it too.
+
+Three rules keep the answer honest:
+
+- A word first said in the chat's opening 90 days does not count. An export beginning is
+  not the same as a word being new, and without this rule whoever talked most in month
+  one "starts" thousands of words the chat had been saying for years.
+- Bots are left out.
+- The count is divided by how much each member says, per 1,000 of their own messages,
+  so a chatty member cannot win on volume. Members under 100 messages are left out,
+  since a rate needs a denominator worth dividing by.
+
+On a small chat nothing reaches twenty uses. Lower the band with `--trend-band 3,50`
+and the words still show even when nobody clears the leaderboard's floor.
+
+### Quiz
+
+A message qualifies only if it uses one of its sender's signature words, so the answer
+is gettable rather than a coin flip. Messages that name somebody give the answer away
+and are left out, as are bot messages. The three wrong answers are sampled by message
+volume, so they are plausible for that era. It is seeded, so regenerating the report
+does not reshuffle the questions.
+
+### Group history
+
+Messenger writes its own messages about the group: renames, nicknames, joins and
+removals. They are dropped from the vocabulary, because otherwise "named the group"
+ranks as an inside joke said by everyone for years. Read back, they are a record nobody
+has seen. On a nine-year chat that was 520 group names and 369 nickname changes.
+Nicknames are shown as dated ranges, since the question people ask is what somebody was
+called in 2021, not when the name was set.
 
 ## Privacy
 
-- All processing happens locally.
-- `--anonymize` replaces real names in every chart and report, including names that
-  appear inside quoted message text.
-- `--serve` binds to `127.0.0.1` only, so the reader is never reachable from the network.
-- `.gitignore` excludes `data/` and `output/` so an export cannot be committed.
+- All processing happens on your machine.
+- `--anonymize` replaces real names everywhere, including names inside quoted messages.
+- `--serve` binds to `127.0.0.1`, so the reader is never reachable from the network.
+- Text that comes from the export, meaning thread titles, names and message bodies, is
+  escaped everywhere it is rendered, in the reader and in the generated reports.
+- `.gitignore` excludes `data/` and `output/`, so an export cannot be committed by
+  accident.
 
-## Sample data
+## Examples and sample data
 
-`sample_data/` contains a small synthetic thread used for testing:
-
-```bash
-python analyze_chat.py --input sample_data --track "shawarma, bro" --json
-```
-
-## Tests
+`sample_data/` holds a small synthetic thread, 94 messages across four members and nine
+years. Run it to see the output without touching your own data:
 
 ```bash
-pip install -r requirements-dev.txt
-python -m pytest
+python analyze_chat.py --input sample_data --track "shawarma, bro" --json --trend-band 3,50
 ```
 
-## Examples
-
-Sample output from the synthetic thread is in `examples/`:
-
-- `example_summary.md` - a full generated report
-- `report.html` - the same report as a single self-contained HTML file
-- `summary.json` - the report data as structured JSON
-- `year_in_review.html` and `year_<year>.html` - one page per year
-- PNG charts: messages per year, activity heatmap, pace trends, activity by
-  hour/weekday, hours by year, top members, top words, word clouds, emoji timeline, yearly recap,
-  pair dynamics, hourly radar, reaction dynamics, question dynamics, topics per
-  year, running jokes, response speed, swear stats, tracked terms, domains, media
-  leaderboard, reply chains, ghosting, monologues, conversation starters, monthly
-  timeline, word trends, and sentiment
+`examples/` holds exactly that run, committed so you can look before installing
+anything: `example_summary.md`, `report.html`, `summary.json`, every generated page,
+and the charts. The band is lowered there because 94 messages never reach twenty uses
+of a word.
 
 ![Activity heatmap](examples/activity_heatmap.png)
 
@@ -409,7 +425,14 @@ Sample output from the synthetic thread is in `examples/`:
 
 ![Hourly radar](examples/hourly_radar.png)
 
-![Word cloud](examples/wordcloud.png)
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+The suite takes about six minutes.
 
 ## License
 
