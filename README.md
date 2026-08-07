@@ -119,7 +119,7 @@ Options:
 | `--json` | Also write `summary.json` with the report data as structured JSON |
 | `--serve` | Start the local chat reader web UI instead of writing reports |
 | `--port` | Port for `--serve` (default: 8080) |
-| `--no-index` | Skip the word-search index when serving. Starts faster; the word explorer is unavailable |
+| `--no-index` | Skip the word-search index when serving. Starts instantly from the reader store and skips parsing entirely; the word explorer is unavailable |
 | `--tz` | Timezone for analysis, e.g. `+03:00` or `America/New_York` (Messenger timestamps are UTC; default is your system timezone) |
 | `--config` | JSON config file with any of the options above |
 | `--skip` | Skip analyses: `jokes`, `sentiment`, `wordcloud`, `topics`, `narratives` (comma-separated) |
@@ -303,12 +303,32 @@ index of their own — the candidate messages are the ones containing every word
 so `in the` came back in 1.0 s and `what the hell` in 0.04 s on the same chat.
 Pass `--no-index` to skip the build if you only want to read.
 
+### The reader's store
+
+The reader keeps the parsed messages in a SQLite file at
+`output/.reader/<thread>.sqlite3` and answers the feed, the date jump, "on this
+day", the random memory and search out of it. The file is keyed on the same
+fingerprint `--incremental` uses, plus `--tz` and `--anonymize`, since both
+change what gets stored; anything else rebuilds it.
+
+The practical effect is on the second start. With `--no-index` the export is not
+parsed at all — the reader opens the file and serves. Without it, the messages
+are still parsed because the word explorer needs them in memory. A stale or
+half-written file is rebuilt rather than trusted: the "complete" marker is
+written last, so a run interrupted mid-build leaves a file that fails its own
+check.
+
+Search stays a substring scan, now inside SQLite, and still reports the true
+match count and shows the first page of hits. It is deliberately not a full-text
+index: FTS5 matches whole tokens, so searching `tube` would stop finding
+`youtube.com` — on a 500k-row benchmark that is 0 hits against 358,453. The scan
+costs roughly 60 ms per 500k messages, which is not worth breaking search for.
+
 Media files are served from the export folder only; paths are resolved inside the
 thread directory so nothing outside it can be read, and files are streamed with
 `Range` support so video and audio can seek. Anything that is not an image, video
 or audio downloads rather than rendering, since an export can contain `.html` or
-`.svg` attachments. Search is a substring scan over the messages (regex is
-opt-in) that reports the true match count and shows the first page of hits.
+`.svg` attachments.
 
 Text that comes from the export — thread titles, names, message bodies — is
 escaped everywhere it is rendered, in the reader and in the generated reports.
