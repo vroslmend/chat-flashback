@@ -43,6 +43,9 @@ Runs locally. Your data is not uploaded anywhere.
   minutes: who opens them, who has the last word, how long they actually run, the
   longest one ever, and the chat's own longest silences with the message that
   ended each.
+- Trendsetters. Who says a word first and then watches everybody else start
+  saying it, scored per 1,000 of their own messages so the loudest member does
+  not win by volume.
 - Sleep schedules. Every member's posting hours, year by year rather than
   averaged over all of them, so somebody's hours sliding later reads as a move
   and their 3am tail vanishing reads as a job.
@@ -116,6 +119,7 @@ Options:
 | `--stopwords-file` | Extra stopwords to ignore in word stats, one per line (the built-in list is English only) |
 | `--year` | Analyze only one year, e.g. `--year 2017` |
 | `--top` | Number of entries in leaderboards and charts (default: 10) |
+| `--trend-band` | How often a word must be used to count as one somebody started, as `min,max` (default: `20,2000`). Lower it on a small chat, where nothing reaches twenty uses |
 | `--json` | Also write `summary.json` with the report data as structured JSON |
 | `--serve` | Start the local chat reader web UI instead of writing reports |
 | `--port` | Port for `--serve` (default: 8080) |
@@ -129,8 +133,8 @@ Options:
 
 Writes `summary.md`, `report.html`, PNG charts, `year_<year>.html` year-in-review
 pages, `group_history.html`, `relationships.html`, `eras.html`, `sessions.html`,
-`quiz.html` and a `member_<name>.html` per member into `output/<thread>/`. Every
-page is linked from the report's top bar.
+`trendsetters.html`, `quiz.html` and a `member_<name>.html` per member into
+`output/<thread>/`. Every page is linked from the report's top bar.
 
 ### Config file
 
@@ -153,7 +157,7 @@ python analyze_chat.py --config config.json
 
 ### Group history, relationships and eras
 
-Five pages sit beside the report, plus one page per member.
+Six pages sit beside the report, plus one page per member.
 
 **Group history** reads back the messages Messenger writes about the group itself
 — renames, nicknames, joins and removals. They are dropped from the vocabulary
@@ -190,6 +194,21 @@ is simply always there. Conversation length is reported as percentiles rather th
 an average, since the distribution runs from two-message exchanges to all-nighters
 and a mean describes neither. Underneath sits the inverse: the chat's longest
 silences, and the message that broke each one.
+
+**Trendsetters** asks who introduces vocabulary that other people actually
+adopt, which is not the same question as who talks most. For every word the
+chat used between 20 and 2,000 times — nobody coined "the", and a word said
+twice is a typo — it takes whoever said it first, and counts the word as having
+caught on only once at least three other members said it too. Three things keep
+the answer honest. A word first said in the chat's opening 90 days does not
+count, because an export beginning is not a word being new and otherwise
+whoever talked most in month one "starts" thousands of words the chat had been
+saying for years. Bots are left out, since Meta AI's vocabulary is not the
+chat's. And the count is divided by how much each member says, per 1,000 of
+their own messages, so a chatty member cannot win on volume alone — which means
+members under 100 messages are left out, a rate needing a denominator worth
+dividing by. Use `--trend-band` to lower the band on a chat too small for twenty
+uses; the words still show even when nobody clears the leaderboard's floor.
 
 **Quiz** is "guess who said this". A message only qualifies if it uses one of its
 sender's signature words, so the answer is gettable; messages that name somebody
