@@ -148,7 +148,8 @@ def test_year_page_shows_that_years_joke_count_not_the_lifetime_one():
     joke = {"phrase": "gujjar town", "count": 8, "members": ["A", "B"],
             "years": [2020, 2021], "by_year": {2020: 3, 2021: 5},
             "members_by_year": {2020: ["A"], 2021: ["B"]}, "example": None}
-    page = ac._year_page_html("t", 2020, {}, {"jokes": {"jokes": [joke]}}, [])
+    page = ac._year_page_html("t", 2020, {}, {"jokes": {"jokes": [joke]}}, [],
+                              {"report.html", "year_in_review.html"})
     assert "<td>3</td>" in page
     assert "<td>8</td>" not in page
     assert "<td>A</td>" in page
