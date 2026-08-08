@@ -2,46 +2,230 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Saturday Squad - group history</title>
+<!--CF-READER-HOOK-->
+<script>
+(function(){try{var s=localStorage.getItem('cf-theme');
+if(s==='light'||s==='dark')document.documentElement.setAttribute('data-theme',s);}catch(e){}})();
+</script>
 <style>
+:root{
+--bg:#15171c;--bg2:#1b1e25;--bg3:#232731;--border:#2b303b;
+--fg:#e6e8ec;--fg2:#99a1ad;--accent:#6d9eff;--accent-fg:#0d1117;
+--pos:#4ec99a;--neg:#e8724f;--shadow:0 1px 2px rgba(0,0,0,.4);
+--s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;
+--t-xs:11px;--t-sm:12px;--t-base:14px;--t-md:15px;--t-lg:18px;--t-xl:22px;--t-2xl:28px;
+--radius:10px;--radius-sm:6px;--topbar-h:48px;
+--font:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+}
+/* No stored choice: follow the machine. Dark stays the fallback. */
+@media (prefers-color-scheme: light){
+:root:not([data-theme]){
+--bg:#ffffff;--bg2:#f6f7f9;--bg3:#eceef2;--border:#e1e4e9;
+--fg:#1a1c20;--fg2:#646b76;--accent:#2f6fe0;--accent-fg:#ffffff;
+--pos:#1f9d6b;--neg:#c4492e;--shadow:0 1px 2px rgba(0,0,0,.06);
+}}
+/* An explicit choice wins over the machine, in both directions. */
+:root[data-theme="light"]{
+--bg:#ffffff;--bg2:#f6f7f9;--bg3:#eceef2;--border:#e1e4e9;
+--fg:#1a1c20;--fg2:#646b76;--accent:#2f6fe0;--accent-fg:#ffffff;
+--pos:#1f9d6b;--neg:#c4492e;--shadow:0 1px 2px rgba(0,0,0,.06);
+}
+
 *{box-sizing:border-box}
-body{font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;padding:0 0 60px;color:#202124;background:#fff;line-height:1.5}
-[data-theme="dark"]{color:#e8e8e8;background:#17191f}
-.topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:8px 20px;background:#f7f8fa;border-bottom:1px solid #e3e5e8;flex-wrap:wrap}
-[data-theme="dark"] .topbar{background:#20242d;border-bottom:1px solid #2a2f3a}
-.brand{font-weight:700;font-size:15px}
-.topbar a{color:#5b8ff9;text-decoration:none;font-size:12px}
-main{max-width:860px;margin:0 auto;padding:0 20px}
-h1{font-size:26px;margin-bottom:4px}
-h2{font-size:20px;margin-top:36px;border-bottom:1px solid #e3e5e8;padding-bottom:6px}
-.muted{color:#777;font-size:13px}
-.cards{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
-.card{flex:1;min-width:120px;background:#f7f8fa;border:1px solid #e3e5e8;border-radius:12px;padding:14px}
-.card b{display:block;font-size:22px}
-.card span{font-size:12px;color:#777}
-[data-theme="dark"] .card{background:#20242d;border-color:#2a2f3a}
-[data-theme="dark"] .card span{color:#9aa0a6}
-[data-theme="dark"] h2{border-color:#2a2f3a}
-ul{margin:8px 0}
-li{margin:4px 0}
-img{max-width:100%;border-radius:10px;margin:6px 0}
-table{border-collapse:collapse;width:100%;margin:10px 0}
-th,td{border:1px solid #e3e5e8;padding:6px 10px;text-align:left;font-size:13px}
-[data-theme="dark"] th,[data-theme="dark"] td{border-color:#2a2f3a}
-#theme{border:1px solid #e3e5e8;background:#fff;color:#202124;border-radius:6px;padding:4px 10px;cursor:pointer;margin-left:auto}
-.quote{border-left:3px solid #e3e5e8;background:#f7f8fa;border-radius:4px;padding:6px 10px;margin:6px 0;font-size:13px}
-[data-theme="dark"] .quote{border-left-color:#2a2f3a;background:#20242d}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--font);background:var(--bg);color:var(--fg);
+line-height:1.55;font-size:var(--t-base);-webkit-text-size-adjust:100%}
+a{color:var(--accent)}
+/* Top bar. Fixed height and a nav that scrolls sideways rather than wrapping:
+   a bar that cannot grow cannot swallow the sticky headers below it. */
+.cf-top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:var(--s4);
+height:var(--topbar-h);padding:0 var(--s4);background:var(--bg2);
+border-bottom:1px solid var(--border)}
+.cf-brand{flex:0 0 auto;font-weight:700;font-size:var(--t-md);color:var(--fg);
+text-decoration:none;white-space:nowrap;max-width:30vw;overflow:hidden;text-overflow:ellipsis}
+.cf-nav{flex:1 1 auto;min-width:0;display:flex;gap:2px;overflow-x:auto;
+scrollbar-width:none;-ms-overflow-style:none}
+.cf-nav::-webkit-scrollbar{display:none}
+.cf-nav a{white-space:nowrap;color:var(--fg2);text-decoration:none;font-size:var(--t-sm);
+padding:5px 10px;border-radius:var(--radius-sm);line-height:1.4}
+.cf-nav a:hover{background:var(--bg3);color:var(--fg)}
+.cf-nav a[aria-current="page"]{background:var(--accent);color:var(--accent-fg);font-weight:600}
+.cf-reader{display:none}
+.has-reader .cf-reader,.cf-reader.on{display:block}
+.cf-btn{flex:0 0 auto;font:inherit;font-size:var(--t-sm);border:1px solid var(--border);
+background:var(--bg);color:var(--fg);border-radius:var(--radius-sm);padding:5px 10px;cursor:pointer}
+.cf-btn:hover{border-color:var(--accent)}
+/* Page frame */
+.cf-wrap{display:grid;grid-template-columns:190px minmax(0,1fr);gap:var(--s6);
+max-width:1180px;margin:0 auto;padding:0 var(--s4) var(--s7)}
+.cf-wrap.solo{grid-template-columns:minmax(0,1fr);max-width:920px}
+.cf-side{position:sticky;top:calc(var(--topbar-h) + var(--s4));align-self:start;
+max-height:calc(100vh - var(--topbar-h) - var(--s5));overflow-y:auto;padding:var(--s5) 0 var(--s4)}
+.cf-side a{display:block;padding:4px 10px;font-size:var(--t-sm);color:var(--fg2);
+text-decoration:none;border-left:2px solid transparent}
+.cf-side a:hover{color:var(--fg)}
+.cf-side a.on{color:var(--fg);border-left-color:var(--accent);background:var(--bg2)}
+.cf-jump{display:none;width:100%;margin:var(--s4) 0 0;padding:7px 10px;font:inherit;
+font-size:var(--t-sm);background:var(--bg2);color:var(--fg);border:1px solid var(--border);
+border-radius:var(--radius-sm)}
+@media(max-width:880px){
+.cf-wrap{grid-template-columns:minmax(0,1fr);gap:0}
+.cf-side{display:none}
+.cf-jump{display:block}
+}
+main{min-width:0;padding-top:var(--s5)}
+h1{font-size:var(--t-2xl);margin:0 0 var(--s1);line-height:1.2}
+h2{font-size:var(--t-lg);margin:var(--s7) 0 var(--s3);padding-bottom:var(--s2);
+border-bottom:1px solid var(--border)}
+h3{font-size:var(--t-md);margin:var(--s5) 0 var(--s2)}
+section{scroll-margin-top:calc(var(--topbar-h) + var(--s3))}
+p{margin:var(--s2) 0}
+.muted{color:var(--fg2);font-size:var(--t-sm)}
+.lede{color:var(--fg2);font-size:var(--t-md);margin:0 0 var(--s5)}
+ul{margin:var(--s2) 0;padding-left:var(--s5)}
+li{margin:var(--s1) 0}
+/* Cards on a real grid, so rows line up instead of running ragged. */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));
+gap:var(--s3);margin:var(--s5) 0}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+padding:var(--s3) var(--s4);min-width:0}
+.card b{display:block;font-size:var(--t-xl);line-height:1.2;font-variant-numeric:tabular-nums;
+overflow-wrap:anywhere}
+.card span{display:block;font-size:var(--t-sm);color:var(--fg2);margin-top:2px}
+/* Cards whose headline is a name rather than a number. */
+.cards.named .card b{font-size:var(--t-md);line-height:1.35}
+/* Tables. Wide ones scroll inside their own box rather than the page. */
+.tablewrap{overflow-x:auto;margin:var(--s3) 0}
+table{border-collapse:collapse;width:100%;font-size:var(--t-base)}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);
+vertical-align:top}
+/* Not sticky: `.tablewrap` scrolls sideways, which makes it the containing
+   block for a sticky header and lands the row on top of the first one. */
+th{color:var(--fg2);font-weight:600;font-size:var(--t-sm);white-space:nowrap;
+background:var(--bg)}
+th[data-sort]{cursor:pointer;user-select:none}
+th[data-sort]:hover{color:var(--fg)}
+th.asc::after{content:" \25b2";font-size:8px}
+th.desc::after{content:" \25bc";font-size:8px}
+tbody tr:hover{background:var(--bg2)}
+td{font-variant-numeric:tabular-nums}
+.tfilter{margin:var(--s3) 0 0;padding:6px 10px;font:inherit;font-size:var(--t-sm);
+border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg2);
+color:var(--fg);width:min(240px,100%)}
+.quote{border-left:3px solid var(--border);background:var(--bg2);
+border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:var(--s2) var(--s3);
+margin:var(--s2) 0}
+.quote b{font-size:var(--t-sm)}
+/* Promoted only when a reader is running; a plain comment otherwise. */
+.tslink{margin-left:var(--s2);font-size:var(--t-xs);color:var(--accent);text-decoration:none;
+border:1px solid var(--border);border-radius:4px;padding:1px 6px;white-space:nowrap}
+.tslink:hover{border-color:var(--accent);background:var(--bg3)}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:var(--s5)}
+figure{margin:0;background:var(--bg2);border:1px solid var(--border);
+border-radius:var(--radius);padding:var(--s3)}
+figure img{max-width:100%;border-radius:var(--radius-sm);display:block}
+figcaption{color:var(--fg2);font-size:var(--t-sm);margin-top:var(--s2)}
+img{max-width:100%}
+.pager{display:flex;gap:var(--s3);justify-content:space-between;margin:var(--s7) 0 0;
+padding-top:var(--s4);border-top:1px solid var(--border);font-size:var(--t-sm)}
+.pager a{text-decoration:none}
+.pager span{color:var(--fg2)}
+.grid-links{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+gap:var(--s3);margin:var(--s5) 0;padding:0;list-style:none}
+.grid-links li{margin:0;background:var(--bg2);border:1px solid var(--border);
+border-radius:var(--radius);padding:var(--s3) var(--s4)}
+.grid-links li:hover{border-color:var(--accent)}
+/* Direct children only: a card can hold ordinary links of its own, and they
+   should not each become a card in turn. */
+.grid-links > li > a{display:block;text-decoration:none;color:var(--fg)}
+.grid-links b{display:block;font-size:var(--t-md)}
+.grid-links span{display:block;color:var(--fg2);font-size:var(--t-sm);margin-top:2px}
+/* Wrapped with a gap rather than separators, which otherwise dangle at the
+   end of every wrapped line. */
+.grid-links p{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s3);
+margin:var(--s3) 0 0;padding-top:var(--s3);border-top:1px solid var(--border)}
+.grid-links p a{color:var(--accent);text-decoration:none;white-space:nowrap;
+font-size:var(--t-sm)}
+.grid-links p a:hover{text-decoration:underline}
 </style>
 </head><body>
-<div class="topbar"><span class="brand">Saturday Squad flashback</span>
-<a href="report.html">Report</a><a href="year_in_review.html">Years</a><a href="relationships.html">Relationships</a><a href="eras.html">Eras</a><a href="sessions.html">Conversations</a><a href="trendsetters.html">Trendsetters</a><a href="quiz.html">Quiz</a>
-<button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
-<main>
-<h1>Group history</h1>
-<p class="muted">0 changes the group made to itself. Currently called <b>-</b>.</p>
-<section id="names"><h2>What the group has called itself</h2><p>No renames.</p></section><section id="nicknames"><h2>Nicknames</h2><p>No nicknames.</p></section><section id="who"><h2>Who changes things</h2></section><section id="membership"><h2>Comings and goings</h2><p>Nobody joined or left.</p></section>
-</main>
+<header class="cf-top"><a class="cf-brand" href="report.html">Saturday Squad flashback</a><nav class="cf-nav" aria-label="Pages"><a class="cf-reader" href="./">Reader</a><a href="report.html">Report</a><a href="year_in_review.html">Years</a><a href="members.html">Members</a><a href="group_history.html" aria-current="page">Group history</a><a href="relationships.html">Relationships</a><a href="eras.html">Eras</a><a href="sessions.html">Conversations</a><a href="trendsetters.html">Trendsetters</a><a href="quiz.html">Quiz</a></nav><button id="cf-theme" class="cf-btn" type="button">☾ Dark</button></header>
+<div class="cf-wrap"><aside class="cf-side" aria-label="Sections"><a href="#names">What the group has called itself</a><a href="#nicknames">Nicknames</a><a href="#who">Who changes things</a><a href="#membership">Comings and goings</a></aside><main><select class="cf-jump" id="cf-jump" aria-label="Jump to section"><option value="">Jump to section…</option><option value="#names">What the group has called itself</option><option value="#nicknames">Nicknames</option><option value="#who">Who changes things</option><option value="#membership">Comings and goings</option></select>
+<h1>Group history</h1><p class="lede">0 changes the group made to itself. Currently called <b>-</b>.</p><section id="names"><h2>What the group has called itself</h2><p>No renames.</p></section><section id="nicknames"><h2>Nicknames</h2><p>No nicknames.</p></section><section id="who"><h2>Who changes things</h2></section><section id="membership"><h2>Comings and goings</h2><p>Nobody joined or left.</p></section>
+</main></div>
 <script>
-var t=document.getElementById('theme');
-t.onclick=function(){var dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';t.textContent=dark?'Light':'Dark';};
+(function(){var r=document.documentElement,b=document.getElementById('cf-theme');
+if(!b)return;
+var mq=window.matchMedia?matchMedia('(prefers-color-scheme: light)'):null;
+function effective(){var a=r.getAttribute('data-theme');
+if(a)return a;return(mq&&mq.matches)?'light':'dark';}
+function label(){var next=effective()==='dark'?'light':'dark';
+b.textContent=next==='dark'?'\u263e Dark':'\u2600 Light';
+b.setAttribute('aria-label','Switch to '+next+' theme');}
+b.addEventListener('click',function(){var next=effective()==='dark'?'light':'dark';
+r.setAttribute('data-theme',next);try{localStorage.setItem('cf-theme',next);}catch(e){}label();});
+if(mq&&mq.addEventListener)mq.addEventListener('change',function(){if(!r.getAttribute('data-theme'))label();});
+label();})();
+
+(function(){
+document.querySelectorAll('table').forEach(function(t){
+  var tb=t.tBodies[0];if(!tb)return;
+  var ths=t.querySelectorAll('thead th');
+  // A filter box earns its place on a long table and clutters a short one.
+  if(tb.rows.length>=8){
+    var box=document.createElement('input');box.className='tfilter';
+    box.placeholder='Filter rows';box.setAttribute('aria-label','Filter table rows');
+    t.parentNode.insertBefore(box,t);
+    box.addEventListener('input',function(){var q=box.value.toLowerCase();
+      Array.prototype.forEach.call(tb.rows,function(tr){
+        tr.style.display=tr.innerText.toLowerCase().indexOf(q)>=0?'':'none';});});
+  }
+  ths.forEach(function(th,i){
+    th.setAttribute('data-sort','');
+    th.addEventListener('click',function(){
+      var rows=Array.prototype.slice.call(tb.rows);
+      var num=rows.every(function(tr){var c=tr.cells[i];
+        return c&&c.textContent.trim()!==''&&!isNaN(parseFloat(c.textContent.replace(/[^0-9.-]/g,'')));});
+      var dir=th.classList.contains('asc')?-1:1;
+      ths.forEach(function(x){x.classList.remove('asc','desc');});
+      th.classList.add(dir===1?'asc':'desc');
+      rows.sort(function(a,b){var av=a.cells[i],bv=b.cells[i];
+        if(!av||!bv)return 0;
+        av=av.textContent.trim();bv=bv.textContent.trim();
+        return num?(parseFloat(av.replace(/[^0-9.-]/g,''))-parseFloat(bv.replace(/[^0-9.-]/g,'')))*dir
+                  :av.localeCompare(bv)*dir;});
+      rows.forEach(function(tr){tb.appendChild(tr);});});});
+});
+var side=document.querySelectorAll('.cf-side a'),jump=document.getElementById('cf-jump');
+if(jump)jump.addEventListener('change',function(){
+  if(jump.value)location.hash=jump.value;});
+if(side.length&&window.IntersectionObserver){
+  var byId={};side.forEach(function(a){byId[a.getAttribute('href').slice(1)]=a;});
+  var seen={};
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){seen[e.target.id]=e.isIntersecting;});
+    var first=null;
+    Object.keys(byId).forEach(function(id){if(!first&&seen[id])first=id;});
+    if(first){side.forEach(function(a){a.classList.remove('on');});
+      byId[first].classList.add('on');
+      if(jump)jump.value='#'+first;}},
+    {rootMargin:'-'+(document.querySelector('.cf-top').offsetHeight+8)+'px 0px -70% 0px'});
+  document.querySelectorAll('main section[id]').forEach(function(s){io.observe(s);});
+}
+// Quoted messages carry their timestamp and member pages their member; only a
+// running reader can do anything with either, so the links appear only then.
+if(window.CF_READER){
+  function link(el,hash,text,title){
+    var a=document.createElement('a');a.className='tslink';
+    a.href=window.CF_READER+'#'+hash;a.textContent=text;a.title=title;
+    el.appendChild(document.createTextNode(' '));el.appendChild(a);}
+  document.querySelectorAll('[data-ts]').forEach(function(el){
+    link(el,'ts='+el.getAttribute('data-ts'),'open \u2197',
+         'Open this moment in the reader');});
+  document.querySelectorAll('[data-member]').forEach(function(el){
+    link(el,'member='+encodeURIComponent(el.getAttribute('data-member')),
+         'read their messages \u2197','Filter the reader to this member');});
+}
+})();
 </script>
 </body></html>

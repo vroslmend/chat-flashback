@@ -104,6 +104,7 @@ sleep-schedule grid of everyone's posting hours year by year.
 | Page | What is on it |
 |---|---|
 | `year_in_review.html` | An index, plus `year_<year>.html` for every year |
+| `members.html` | An index of everyone, linking to their pages |
 | `group_history.html` | Every name the group gave itself and every nickname, as dated ranges |
 | `member_<name>.html` | One per member: their years, their words, who they answer, their most-reacted messages |
 | `relationships.html` | Pairs by year, pairs that drifted apart, who breaks the silence, who gets the last word |
@@ -122,7 +123,10 @@ sleep-schedule grid of everyone's posting hours year by year.
 - Search across every message, with a `.*` regex toggle and per-member filters
 - Jump to a date, an "On this day" view across the years, and a "Surprise me" button
 - A word explorer behind the Words button
-- A light and dark toggle that is remembered between visits
+- Every page above in one navigation bar, in one theme that follows your system
+  until you pick one and is then remembered
+- Searches, filters and jumps live in the address bar, so the back button undoes
+  them and a view can be bookmarked or shared
 
 ### Handling of awkward exports
 
@@ -250,6 +254,12 @@ python analyze_chat.py --input <thread> --serve
 
 The server listens on `127.0.0.1` only, with no authentication, so it is not reachable
 from your network.
+
+If you have already run the analysis, `--serve` also serves every page it wrote, and
+they gain links the files on disk do not have: quoted messages on the Conversations
+page and answers in the quiz get an "open" link that jumps the reader to that exact
+moment, and each member page links to that member's filtered feed. Open the same files
+straight off disk and those stay plain text, since there is no reader to open.
 
 ### Word explorer
 
