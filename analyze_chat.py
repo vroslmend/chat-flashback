@@ -28,6 +28,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from better_profanity import Profanity
 
+import chatpage
+
 try:
     from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer as _Vader
     _VADER = _Vader()
@@ -1340,7 +1342,9 @@ def quiz_questions(msgs, personality, names=(), count=QUIZ_QUESTIONS, top=10, se
             rng.shuffle(choices)
             questions.append({"content": m["content"], "answer": member,
                               "choices": choices,
-                              "date": m["dt"].strftime("%Y-%m-%d")})
+                              "date": m["dt"].strftime("%Y-%m-%d"),
+                              # So the reveal can offer the message in context.
+                              "ts": m["ts_ms"]})
     return questions
 
 
@@ -2519,77 +2523,58 @@ def _fig_to_png(fig):
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
-_YEAR_PAGE_CSS = """
-*{box-sizing:border-box}
-body{font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;padding:0 0 60px;color:#202124;background:#fff;line-height:1.5}
-[data-theme="dark"]{color:#e8e8e8;background:#17191f}
-.topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:8px 20px;background:#f7f8fa;border-bottom:1px solid #e3e5e8;flex-wrap:wrap}
-[data-theme="dark"] .topbar{background:#20242d;border-bottom:1px solid #2a2f3a}
-.brand{font-weight:700;font-size:15px}
-.topbar a{color:#5b8ff9;text-decoration:none;font-size:12px}
-main{max-width:860px;margin:0 auto;padding:0 20px}
-h1{font-size:26px;margin-bottom:4px}
-h2{font-size:20px;margin-top:36px;border-bottom:1px solid #e3e5e8;padding-bottom:6px}
-.muted{color:#777;font-size:13px}
-.cards{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
-.card{flex:1;min-width:120px;background:#f7f8fa;border:1px solid #e3e5e8;border-radius:12px;padding:14px}
-.card b{display:block;font-size:22px}
-.card span{font-size:12px;color:#777}
-[data-theme="dark"] .card{background:#20242d;border-color:#2a2f3a}
-[data-theme="dark"] .card span{color:#9aa0a6}
-[data-theme="dark"] h2{border-color:#2a2f3a}
-ul{margin:8px 0}
-li{margin:4px 0}
-img{max-width:100%;border-radius:10px;margin:6px 0}
-table{border-collapse:collapse;width:100%;margin:10px 0}
-th,td{border:1px solid #e3e5e8;padding:6px 10px;text-align:left;font-size:13px}
-[data-theme="dark"] th,[data-theme="dark"] td{border-color:#2a2f3a}
-#theme{border:1px solid #e3e5e8;background:#fff;color:#202124;border-radius:6px;padding:4px 10px;cursor:pointer;margin-left:auto}
-.quote{border-left:3px solid #e3e5e8;background:#f7f8fa;border-radius:4px;padding:6px 10px;margin:6px 0;font-size:13px}
-[data-theme="dark"] .quote{border-left-color:#2a2f3a;background:#20242d}
-"""
+def _written_pages(analyses):
+    """The pages this run actually produced.
+
+    Every nav on every page is built from this one set, so a link can never
+    point at a page that was skipped for lack of data or by --skip.
+    """
+    written = {"report.html", "year_in_review.html"}
+    for href, key in (("group_history.html", "group_history"),
+                      ("relationships.html", "relationships"),
+                      ("eras.html", "eras"),
+                      ("sessions.html", "sessions"),
+                      ("trendsetters.html", "trendsetters"),
+                      ("quiz.html", "quiz")):
+        if analyses.get(key):
+            written.add(href)
+    if analyses.get("member_profiles"):
+        written.add("members.html")
+    return written
+
+
+def _sections_of(body):
+    """The (id, label) of every section in a page, for its sidebar."""
+    return [(sid, NAV_LABELS.get(sid, heading))
+            for sid, heading in re.findall(r'<section id="([^"]+)"><h2>([^<]*)</h2>', body)]
 
 
 def write_year_reviews(title, stats, analyses, out_dir):
     years = sorted(stats["by_year"])
     if not years:
         return
+    written = _written_pages(analyses)
     index_rows = []
-    for year in years:
+    for i, year in enumerate(years):
         recap = analyses.get("yearly", {}).get(year, {})
         pngs = _year_mini_charts(stats, analyses, year)
-        html_doc = _year_page_html(title, year, recap, analyses, pngs)
+        prev_year = years[i - 1] if i else None
+        next_year = years[i + 1] if i + 1 < len(years) else None
+        html_doc = _year_page_html(title, year, recap, analyses, pngs, written,
+                                   prev_year, next_year)
         (out_dir / f"year_{year}.html").write_text(html_doc, encoding="utf-8")
         top = recap.get("top_member", "-")
         index_rows.append(
-            f"<tr><td><a href='year_{year}.html'>{year}</a></td>"
-            f"<td>{recap.get('total', 0):,}</td>"
-            f"<td>{html_lib.escape(str(top))}</td>"
-            f"<td>{recap.get('active_members', 0)}</td>"
-            f"<td>{recap.get('record_day', '-')}</td></tr>")
-    rows = "".join(index_rows)
-    index = f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{html_lib.escape(title)} - year in review</title>
-<style>{_YEAR_PAGE_CSS}</style>
-</head><body>
-<div class="topbar"><span class="brand">{html_lib.escape(title)} flashback</span>
-<a href="report.html">Report</a>
-<button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
-<main>
-<h1>Year in review</h1>
-<p class="muted">One page per year of chat history.</p>
-<table>
-<tr><th>Year</th><th>Messages</th><th>Top member</th><th>Active members</th><th>Record day</th></tr>
-{rows}
-</table>
-</main>
-<script>
-var t=document.getElementById('theme');
-t.onclick=function(){{var dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';t.textContent=dark?'Light':'Dark';}};
-</script>
-</body></html>"""
+            (f"<a href='year_{year}.html'>{year}</a>", f"{recap.get('total', 0):,}",
+             html_lib.escape(str(top)), str(recap.get("active_members", 0)),
+             str(recap.get("record_day", "-"))))
+    body = (f'<h1>Year in review</h1><p class="lede">One page per year of '
+            f'{html_lib.escape(title)}, {years[0]} to {years[-1]}.</p>'
+            + _table(["Year", "Messages", "Top member", "Active members", "Record day"],
+                     index_rows))
+    index = chatpage.document(
+        doc_title=f"{title} - year in review", brand=f"{title} flashback",
+        written=written, current="year_in_review.html", main=body)
     (out_dir / "year_in_review.html").write_text(index, encoding="utf-8")
 
 
@@ -2625,7 +2610,8 @@ def _year_mini_charts(stats, analyses, year):
     return pngs
 
 
-def _year_page_html(title, year, recap, analyses, pngs):
+def _year_page_html(title, year, recap, analyses, pngs, written,
+                    prev_year=None, next_year=None):
     cards = []
     cards.append(f"<div class='card'><b>{recap.get('total', 0):,}</b><span>messages</span></div>")
     cards.append(f"<div class='card'><b>{recap.get('active_members', 0)}</b><span>members active</span></div>")
@@ -2662,70 +2648,50 @@ def _year_page_html(title, year, recap, analyses, pngs):
         # This year's numbers. Printing the lifetime count here made every year
         # page claim the same 1,125 uses of a phrase said across nine years.
         year_jokes.sort(key=lambda j: -j.get("by_year", {}).get(year, j["count"]))
-        rows = "".join(
-            f"<tr><td><i>{html_lib.escape(j['phrase'])}</i></td>"
-            f"<td>{j.get('by_year', {}).get(year, j['count'])}</td>"
-            f"<td>{html_lib.escape(', '.join(member_label(n) for n in j.get('members_by_year', {}).get(year, j['members'])))}</td></tr>"
-            for j in year_jokes)
-        jokes_html = (f"<h2>Running jokes in {year}</h2><table>"
-                      f"<tr><th>Phrase</th><th>Times in {year}</th><th>Members</th></tr>"
-                      f"{rows}</table>")
+        rows = [(f"<i>{html_lib.escape(j['phrase'])}</i>",
+                 str(j.get("by_year", {}).get(year, j["count"])),
+                 html_lib.escape(", ".join(
+                     member_label(n) for n in
+                     j.get("members_by_year", {}).get(year, j["members"]))))
+                for j in year_jokes]
+        jokes_html = _sec("jokes", f"Running jokes in {year}",
+                          _table(["Phrase", f"Times in {year}", "Members"], rows))
 
-    return f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{html_lib.escape(title)} - {year} in review</title>
-<style>{_YEAR_PAGE_CSS}</style>
-</head><body>
-<div class="topbar"><span class="brand">{html_lib.escape(title)} flashback</span>
-<a href="year_in_review.html">All years</a>
-<a href="report.html">Report</a>
-<button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
-<main>
-<h1>{year} in review</h1>
-<p class="muted">{html_lib.escape(title)}</p>
-<div class="cards">{''.join(cards)}</div>
-{"<ul>" + "".join(facts) + "</ul>" if facts else ""}
-{chart_html}
-{jokes_html}
-</main>
-<script>
-var t=document.getElementById('theme');
-t.onclick=function(){{var dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';t.textContent=dark?'Light':'Dark';}};
-</script>
-</body></html>"""
+    body = (f'<h1>{year} in review</h1>'
+            f'<p class="lede">{html_lib.escape(title)}</p>'
+            f'<div class="cards">{"".join(cards)}</div>'
+            + (f'<ul>{"".join(facts)}</ul>' if facts else "")
+            + (f'<div class="charts">{chart_html}</div>' if chart_html else "")
+            + jokes_html
+            + _pager(f"year_{prev_year}.html" if prev_year else None,
+                     f"{prev_year}" if prev_year else None,
+                     f"year_{next_year}.html" if next_year else None,
+                     f"{next_year}" if next_year else None))
+    return chatpage.document(
+        doc_title=f"{title} - {year} in review", brand=f"{title} flashback",
+        written=written, current="year_in_review.html", main=body)
 
 
-_NARRATIVE_PAGES = [("report.html", "Report"), ("year_in_review.html", "Years"),
-                    ("group_history.html", "Group history"),
-                    ("relationships.html", "Relationships"), ("eras.html", "Eras"),
-                    ("sessions.html", "Conversations"),
-                    ("trendsetters.html", "Trendsetters"), ("quiz.html", "Quiz")]
+def _pager(prev_href, prev_label, next_href, next_label):
+    """Prev/next between sibling pages, so a year or a member is not a dead end."""
+    if not prev_href and not next_href:
+        return ""
+    left = (f'<a href="{prev_href}">&larr; {html_lib.escape(str(prev_label))}</a>'
+            if prev_href else "<span></span>")
+    right = (f'<a href="{next_href}">{html_lib.escape(str(next_label))} &rarr;</a>'
+             if next_href else "<span></span>")
+    return f'<div class="pager">{left}{right}</div>'
 
 
-def _narrative_page(title, current, heading, subtitle, body):
-    """One of the narrative pages, in the same frame as the year pages."""
-    links = "".join(f'<a href="{href}">{label}</a>'
-                    for href, label in _NARRATIVE_PAGES if href != current)
-    return f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{html_lib.escape(title)} - {html_lib.escape(heading.lower())}</title>
-<style>{_YEAR_PAGE_CSS}</style>
-</head><body>
-<div class="topbar"><span class="brand">{html_lib.escape(title)} flashback</span>
-{links}
-<button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
-<main>
-<h1>{html_lib.escape(heading)}</h1>
-<p class="muted">{subtitle}</p>
-{body}
-</main>
-<script>
-var t=document.getElementById('theme');
-t.onclick=function(){{var dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';t.textContent=dark?'Light':'Dark';}};
-</script>
-</body></html>"""
+def _narrative_page(title, current, heading, subtitle, body, written,
+                    pager="", extra_css="", extra_js=""):
+    """One of the narrative pages, in the shared frame every page now uses."""
+    main = (f'<h1>{html_lib.escape(heading)}</h1>'
+            f'<p class="lede">{subtitle}</p>{body}{pager}')
+    return chatpage.document(
+        doc_title=f"{title} - {heading.lower()}", brand=f"{title} flashback",
+        written=written, current=current, main=main,
+        sections=_sections_of(body), extra_css=extra_css, extra_js=extra_js)
 
 
 def _rows(columns, rows):
@@ -2735,7 +2701,7 @@ def _rows(columns, rows):
     return _table(columns, rows)
 
 
-def _group_history_html(title, history):
+def _group_history_html(title, history, written):
     esc = html_lib.escape
     names = _rows(["Name", "From", "Until", "Set by"],
                   [(f"<b>{esc(n['name'])}</b>", n["date"], n["until"] or "still current",
@@ -2764,10 +2730,11 @@ def _group_history_html(title, history):
     current = history["current_name"] or "-"
     subtitle = (f"{history['total']:,} changes the group made to itself. "
                 f"Currently called <b>{esc(current)}</b>.")
-    return _narrative_page(title, "group_history.html", "Group history", subtitle, body)
+    return _narrative_page(title, "group_history.html", "Group history", subtitle,
+                           body, written)
 
 
-def _relationships_html(title, rel):
+def _relationships_html(title, rel, written):
     esc = html_lib.escape
     years = sorted({y for p in rel["all_pairs"] for y in p["by_year"]})
     head = ["Pair", "Interactions"] + [str(y) for y in years]
@@ -2808,10 +2775,11 @@ def _relationships_html(title, rel):
     ])
     return _narrative_page(title, "relationships.html", "Relationships",
                            f"{len(rel['members'])} members, "
-                           f"{len(rel['all_pairs'])} pairs that ever interacted.", body)
+                           f"{len(rel['all_pairs'])} pairs that ever interacted.",
+                           body, written)
 
 
-def _eras_html(title, eras, turnover):
+def _eras_html(title, eras, turnover, written):
     esc = html_lib.escape
     cards = "".join(
         f"<div class='card'><b>{esc(e['name'])}</b>"
@@ -2838,7 +2806,7 @@ def _eras_html(title, eras, turnover):
              "fewer than a third of the previous quarter's top words survive into this one. "
              "Each era is named for the word it uses most out of proportion to the rest of "
              "the chat.</p>"
-             + (f"<div class='cards'>{cards}</div>" if cards else "") + era_block),
+             + (f"<div class='cards named'>{cards}</div>" if cards else "") + era_block),
         _sec("turnover", "Words born and words that died",
              "<p class='muted'>A word is born the year it is first said and dies the year it "
              "is last said. Every word alive at the end would die in the final year, so that "
@@ -2848,10 +2816,11 @@ def _eras_html(title, eras, turnover):
     span = (f"{eras['months'][0]} to {eras['months'][-1]}" if eras.get("months") else "")
     count = len(eras["eras"])
     return _narrative_page(title, "eras.html", "Eras",
-                           f"{count} period{'' if count == 1 else 's'} across {span}.", body)
+                           f"{count} period{'' if count == 1 else 's'} across {span}.",
+                           body, written)
 
 
-def _member_page_html(title, profile):
+def _member_page_html(title, profile, written, pager=""):
     esc = html_lib.escape
     member = profile["member"]
     cards = "".join([
@@ -2871,10 +2840,13 @@ def _member_page_html(title, profile):
                        + [f"{profile['talks_to'][y].get(other, 0):,}" for y in talk_years])
                  for other in others]
     reacted = "".join(
-        f"<li>{len(m['reactions'])} reactions &middot; {m['dt'].strftime('%Y-%m-%d')} &middot; "
+        f"<li data-ts='{m['ts_ms']}'>{len(m['reactions'])} reactions &middot; "
+        f"{m['dt'].strftime('%Y-%m-%d')} &middot; "
         f"&quot;{esc(_shorten(m['content'], 90))}&quot;</li>"
         for m in profile["top_reacted"])
     body = "".join([
+        f"<p class='muted' data-member='{esc(member)}'>Everything "
+        f"{esc(member_label(member))} said, in the chat itself.</p>",
         f"<div class='cards'>{cards}</div>",
         _sec("years", "Year by year",
              "<p class='muted'>The words are what set that year apart from this member's own "
@@ -2885,11 +2857,12 @@ def _member_page_html(title, profile):
         _sec("reacted", "Their most-reacted messages",
              f"<ul>{reacted}</ul>" if reacted else "<p>Nobody ever reacted to them.</p>"),
     ])
-    return _narrative_page(title, None, member_label(member),
-                           f"Active {profile['first']} to {profile['last']}.", body)
+    return _narrative_page(title, "members.html", member_label(member),
+                           f"Active {profile['first']} to {profile['last']}.",
+                           body, written, pager=pager)
 
 
-def _sessions_html(title, sess):
+def _sessions_html(title, sess, written):
     esc = html_lib.escape
     turns = ["Member", "Conversations", "Their messages", "Per 100 of their messages"]
     openers = _rows(turns, [(esc(member_label(r["member"])), f"{r['count']:,}",
@@ -2910,8 +2883,11 @@ def _sessions_html(title, sess):
     big = ""
     if longest:
         shown = longest["messages"][:LONGEST_SESSION_SHOWN]
+        # data-ts turns into a link to that moment in the reader when one is
+        # running, and stays inert text when the page is read off disk.
         lines = "".join(
-            f"<div class='quote'><b>{esc(member_label(m['sender']))}</b> "
+            f"<div class='quote' data-ts='{m['ts_ms']}'>"
+            f"<b>{esc(member_label(m['sender']))}</b> "
             f"<span class='muted'>{m['dt'].strftime('%H:%M')}</span><br>"
             f"{esc(_shorten(m['content'] or _media_label(m), 200))}</div>"
             for m in shown)
@@ -2924,9 +2900,10 @@ def _sessions_html(title, sess):
     silences = _rows(["Quiet for", "From", "Until", "Broken by"],
                      [(_fmt_duration(s["seconds"]),
                        f"{s['before']['dt']:%d %b %Y}", f"{s['after']['dt']:%d %b %Y}",
+                       f"<span data-ts='{s['after']['ts_ms']}'>"
                        f"<b>{esc(member_label(s['after']['sender']))}</b>: "
                        + esc(_shorten(s["after"]["content"]
-                                      or _media_label(s["after"]), 90)))
+                                      or _media_label(s["after"]), 90)) + "</span>")
                       for s in sess["silences"]])
 
     body = "".join([
@@ -2943,7 +2920,7 @@ def _sessions_html(title, sess):
     return _narrative_page(
         title, "sessions.html", "Conversations",
         f"{sess['count']:,} conversations, split wherever nobody spoke for "
-        f"{CONVERSATION_WINDOW_SECONDS // 60} minutes.", body)
+        f"{CONVERSATION_WINDOW_SECONDS // 60} minutes.", body, written)
 
 
 def _trend_days(value):
@@ -2957,7 +2934,7 @@ def _trend_days(value):
     return f"{value / 30.4:.0f} months"
 
 
-def _trendsetters_html(title, trend):
+def _trendsetters_html(title, trend, written):
     esc = html_lib.escape
     leaders = _rows(["Member", "Words they started", "Their messages",
                      "Per 1,000 messages", "Typical wait", "Most-adopted word"],
@@ -2987,95 +2964,199 @@ def _trendsetters_html(title, trend):
     ])
     subtitle = (f"{trend['adopted']:,} of the {trend['considered']:,} words in the band "
                 f"were picked up by {trend['min_adopters']} members or more.")
-    return _narrative_page(title, "trendsetters.html", "Trendsetters", subtitle, body)
+    return _narrative_page(title, "trendsetters.html", "Trendsetters", subtitle,
+                           body, written)
 
 
-def _quiz_html(title, questions):
+QUIZ_CSS = """
+#qbox{max-width:640px}
+.qbar{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin:var(--s4) 0}
+.qbar i{display:block;height:100%;background:var(--accent);transition:width .25s}
+.qmeta{display:flex;justify-content:space-between;font-size:var(--t-sm);color:var(--fg2)}
+.said{font-size:var(--t-lg);line-height:1.5;margin:var(--s5) 0}
+.qchoice{display:flex;gap:var(--s3);align-items:center;width:100%;text-align:left;
+margin:var(--s2) 0;padding:10px 14px;font:inherit;font-size:var(--t-base);
+border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);
+color:var(--fg);cursor:pointer}
+.qchoice kbd{font:inherit;font-size:var(--t-xs);color:var(--fg2);border:1px solid var(--border);
+border-radius:4px;padding:0 5px;background:var(--bg)}
+.qchoice:hover:not(:disabled){border-color:var(--accent)}
+.qchoice:disabled{cursor:default}
+.qchoice.right{border-color:var(--pos);background:color-mix(in srgb,var(--pos) 14%,transparent)}
+.qchoice.wrong{border-color:var(--neg);background:color-mix(in srgb,var(--neg) 14%,transparent)}
+.reveal{margin:var(--s5) 0 0;padding:var(--s4);border:1px solid var(--border);
+border-radius:var(--radius);background:var(--bg2)}
+.reveal p{margin:0 0 var(--s3)}
+.reveal .verdict{font-weight:700}
+.reveal .verdict.yes{color:var(--pos)}
+.reveal .verdict.no{color:var(--neg)}
+"""
+
+
+def _quiz_html(title, questions, written):
     # `</script>` inside a message would close the tag early and drop the rest
     # of the quiz on the floor.
     payload = json.dumps(questions, ensure_ascii=False).replace("</", "<\\/")
-    body = f"""<div id="quiz"></div>
-<p class="muted" id="score"></p>
-<style>
-#quiz .said{{font-size:19px;margin:18px 0 22px;line-height:1.5}}
-#quiz button{{display:block;width:100%;text-align:left;margin:6px 0;padding:9px 13px;
-font:inherit;border:1px solid #e3e5e8;border-radius:8px;background:#f7f8fa;
-color:#202124;cursor:pointer}}
-[data-theme="dark"] #quiz button{{border-color:#2a2f3a;background:#20242d;color:#e8e8e8}}
-#quiz button:hover:not(:disabled){{border-color:#5b8ff9}}
-#quiz button.right{{border-color:#2ea169;background:rgba(46,161,105,.16)}}
-#quiz button.wrong{{border-color:#d1495b;background:rgba(209,73,91,.16)}}
-</style>
-<script>
-var Q={payload}, at=0, hits=0, done=false;
-var box=document.getElementById('quiz'), score=document.getElementById('score');
+    # No <section>: the page is one thing, and its heading is already the h1.
+    body = """
+<div class="qmeta"><span id="qcount"></span><span id="qscore"></span></div>
+<div class="qbar"><i id="qfill" style="width:0"></i></div>
+<div id="qbox"></div>
+"""
+    js = f"""
+(function(){{
+var Q={payload}, at=0, hits=0, answered=false;
+var box=document.getElementById('qbox'), countEl=document.getElementById('qcount');
+var scoreEl=document.getElementById('qscore'), fill=document.getElementById('qfill');
+function el(tag,cls,text){{var e=document.createElement(tag);
+if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}}
+function meta(){{
+  countEl.textContent=at>=Q.length?('All '+Q.length+' done'):((at+1)+' of '+Q.length);
+  // A score of "0 / 0" before the first answer says nothing; hide it until
+  // there is something to report.
+  scoreEl.textContent=(at||answered)?(hits+' correct'):'';
+  fill.style.width=(100*(at+(answered?1:0))/Q.length)+'%';
+}}
+function finish(){{
+  box.textContent='';
+  box.appendChild(el('p','said','That is all '+Q.length+'.'));
+  box.appendChild(el('p',null,'Final score: '+hits+' out of '+Q.length+'.'));
+  var again=el('button','cf-btn','Start over');
+  again.type='button';
+  again.addEventListener('click',function(){{at=0;hits=0;answered=false;draw();}});
+  box.appendChild(again);meta();
+}}
 function draw(){{
-  if(at>=Q.length){{box.innerHTML='<p class="said">That is all '+Q.length+' of them.</p>';
-    score.textContent='Final score: '+hits+' / '+Q.length;return;}}
-  var q=Q[at];done=false;
-  var html='<p class="muted">'+(at+1)+' of '+Q.length+' &middot; '+q.date+'</p>'+
-           '<div class="said"></div>';
-  q.choices.forEach(function(c,i){{
-    html+='<button data-i="'+i+'"><b>'+(i+1)+'</b> &nbsp;</button>';}});
-  box.innerHTML=html;
-  // Names and message text are set as text, never parsed as markup.
-  box.querySelector('.said').textContent='\\u201c'+q.content+'\\u201d';
-  Array.prototype.forEach.call(box.querySelectorAll('button'),function(b,i){{
-    b.appendChild(document.createTextNode(q.choices[i]));
-    b.onclick=function(){{pick(i);}};}});
-  score.textContent=hits+' / '+at+' so far';
+  if(at>=Q.length)return finish();
+  var q=Q[at];answered=false;box.textContent='';
+  box.appendChild(el('p','muted',q.date));
+  box.appendChild(el('div','said','“'+q.content+'”'));
+  q.choices.forEach(function(name,i){{
+    var b=el('button','qchoice');b.type='button';
+    b.appendChild(el('kbd',null,String(i+1)));
+    b.appendChild(el('span',null,name));
+    b.addEventListener('click',function(){{pick(i);}});
+    box.appendChild(b);}});
+  meta();
 }}
 function pick(i){{
-  if(done)return;done=true;
-  var q=Q[at],right=q.choices[i]===q.answer;
+  if(answered)return;
+  var q=Q[at];
+  // Bound by the choices actually offered, not by a fixed four.
+  if(i<0||i>=q.choices.length)return;
+  answered=true;
+  var right=q.choices[i]===q.answer;
   if(right)hits++;
-  Array.prototype.forEach.call(box.querySelectorAll('button'),function(b,j){{
+  var btns=box.querySelectorAll('.qchoice');
+  Array.prototype.forEach.call(btns,function(b,j){{
     b.disabled=true;
-    if(q.choices[j]===q.answer)b.className='right';
-    else if(j===i)b.className='wrong';}});
-  setTimeout(function(){{at++;draw();}},right?650:1500);
+    if(q.choices[j]===q.answer)b.classList.add('right');
+    else if(j===i)b.classList.add('wrong');}});
+  // No timer. The answer stays on screen until you ask for the next one.
+  var rev=el('div','reveal');
+  var v=el('p','verdict '+(right?'yes':'no'),
+           right?'Correct.':('Not quite — that was '+q.answer+'.'));
+  rev.appendChild(v);
+  if(q.ts!=null){{var carrier=el('p','muted','Said '+q.date+'.');
+    carrier.setAttribute('data-ts',q.ts);rev.appendChild(carrier);}}
+  var next=el('button','cf-btn',at+1>=Q.length?'See the result':'Next question');
+  next.type='button';
+  next.addEventListener('click',function(){{at++;draw();}});
+  rev.appendChild(next);
+  box.appendChild(rev);
+  meta();
+  next.focus();
+  if(window.CF_READER&&q.ts!=null){{
+    var a=el('a','tslink','open ↗');
+    a.href=window.CF_READER+'#ts='+q.ts;
+    a.title='Open this message in the reader';
+    rev.querySelector('[data-ts]').appendChild(a);}}
 }}
 document.addEventListener('keydown',function(e){{
-  var n=parseInt(e.key,10);if(n>=1&&n<=4)pick(n-1);}});
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  if(at>=Q.length)return;
+  if(answered){{
+    if(e.key==='Enter'||e.key===' '||e.key==='ArrowRight'){{
+      e.preventDefault();at++;draw();}}
+    return;}}
+  var n=parseInt(e.key,10);
+  if(!isNaN(n))pick(n-1);}});
 draw();
-</script>"""
+}})();
+"""
     return _narrative_page(title, "quiz.html", "Guess who said this",
                            "Every line below uses a word that gives its sender away. "
-                           "Press 1-4 or click.", body)
+                           "Press a number or click, then Enter for the next one.",
+                           body, written, extra_css=QUIZ_CSS, extra_js=js)
+
+
+def _members_index_html(title, profiles, written):
+    """An index for the member pages.
+
+    Without one they are reachable only by noticing that a name in the report's
+    leaderboard happens to be a link.
+    """
+    ordered = sorted(profiles.items(), key=lambda kv: -kv[1]["total"])
+    cards = "".join(
+        f'<li><a href="member_{_slug(m)}.html">'
+        f'<b>{html_lib.escape(member_label(m))}</b>'
+        f'<span>{p["total"]:,} messages &middot; {p["share"]}% of the chat</span>'
+        f'<span>{p["first"]} to {p["last"]}</span></a></li>'
+        for m, p in ordered)
+    body = f'<ul class="grid-links">{cards}</ul>'
+    return _narrative_page(title, "members.html", "Members",
+                           f"{len(ordered)} member"
+                           f"{'' if len(ordered) == 1 else 's'} with a page of their own.",
+                           body, written)
 
 
 def write_narrative_pages(title, analyses, out_dir):
     """The group's history, its pairs, its eras, and a page per member."""
     out_dir.mkdir(parents=True, exist_ok=True)
+    written = _written_pages(analyses)
     history = analyses.get("group_history")
     if history:
         (out_dir / "group_history.html").write_text(
-            _group_history_html(title, history), encoding="utf-8")
+            _group_history_html(title, history, written), encoding="utf-8")
     rel = analyses.get("relationships")
     if rel:
         (out_dir / "relationships.html").write_text(
-            _relationships_html(title, rel), encoding="utf-8")
+            _relationships_html(title, rel, written), encoding="utf-8")
     eras = analyses.get("eras")
     if eras:
         (out_dir / "eras.html").write_text(
-            _eras_html(title, eras, analyses.get("turnover") or {"years": [], "born": {}, "died": {}}),
+            _eras_html(title, eras,
+                       analyses.get("turnover") or {"years": [], "born": {}, "died": {}},
+                       written),
             encoding="utf-8")
     sess = analyses.get("sessions")
     if sess:
         (out_dir / "sessions.html").write_text(
-            _sessions_html(title, sess), encoding="utf-8")
+            _sessions_html(title, sess, written), encoding="utf-8")
     trend = analyses.get("trendsetters")
     if trend:
         (out_dir / "trendsetters.html").write_text(
-            _trendsetters_html(title, trend), encoding="utf-8")
+            _trendsetters_html(title, trend, written), encoding="utf-8")
     quiz = analyses.get("quiz")
     if quiz:
         (out_dir / "quiz.html").write_text(
-            _quiz_html(title, quiz), encoding="utf-8")
-    for member, profile in (analyses.get("member_profiles") or {}).items():
-        if profile:
+            _quiz_html(title, quiz, written), encoding="utf-8")
+    profiles = {m: p for m, p in (analyses.get("member_profiles") or {}).items() if p}
+    if profiles:
+        (out_dir / "members.html").write_text(
+            _members_index_html(title, profiles, written), encoding="utf-8")
+        # Ordered the same way the index is, so prev/next walks the list you saw.
+        order = sorted(profiles, key=lambda m: -profiles[m]["total"])
+        for i, member in enumerate(order):
+            prev_m = order[i - 1] if i else None
+            next_m = order[i + 1] if i + 1 < len(order) else None
+            pager = _pager(f"member_{_slug(prev_m)}.html" if prev_m else None,
+                           member_label(prev_m) if prev_m else None,
+                           f"member_{_slug(next_m)}.html" if next_m else None,
+                           member_label(next_m) if next_m else None)
             (out_dir / f"member_{_slug(member)}.html").write_text(
-                _member_page_html(title, profile), encoding="utf-8")
+                _member_page_html(title, profiles[member], written, pager),
+                encoding="utf-8")
 
 
 def _js_msg(m):
@@ -3215,7 +3296,9 @@ def _thead(columns):
 def _table(columns, rows):
     body = "<tbody>" + "".join("<tr>" + "".join(f"<td>{r}</td>" for r in row) + "</tr>"
                                for row in rows) + "</tbody>"
-    return f"<table>{_thead(columns)}{body}</table>"
+    # Wrapped so a table with a column per year scrolls inside its own box
+    # instead of pushing the whole page sideways.
+    return f'<div class="tablewrap"><table>{_thead(columns)}{body}</table></div>'
 
 
 def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10,
@@ -3462,97 +3545,23 @@ def write_report_html(title, stats, analyses, out_dir, anonymized, dates, top=10
     # Derived from the sections that were actually built, so a section can never
     # be added without a link, or linked after being skipped for lack of data.
     joined = "".join(sections)
-    nav = "".join(
-        f'<a href="#{sid}">{html_lib.escape(NAV_LABELS.get(sid, heading))}</a>'
-        for sid, heading in re.findall(r'<section id="([^"]+)"><h2>([^<]*)</h2>', joined))
     totals_cards = "".join(
         f"<div class='card'><b>{html_lib.escape(value)}</b>"
         f"<span>{html_lib.escape(label.lower())}</span></div>"
         for label, value in all_time_totals(stats, analyses))
-    # The sibling pages, linked only when the run actually wrote them.
-    written = {"year_in_review.html": True,
-               "group_history.html": bool(analyses.get("group_history")),
-               "relationships.html": bool(analyses.get("relationships")),
-               "eras.html": bool(analyses.get("eras")),
-               "sessions.html": bool(analyses.get("sessions")),
-               "trendsetters.html": bool(analyses.get("trendsetters")),
-               "quiz.html": bool(analyses.get("quiz"))}
-    extra_pages = '<span class="pages">' + "".join(
-        f'<a class="years" href="{href}">{label}</a>'
-        for href, label in _NARRATIVE_PAGES
-        if href != "report.html" and written.get(href)) + "</span>"
-    body = f"""<div class="topbar"><span class="brand">{html_lib.escape(title)} flashback</span>
-<nav>{nav}</nav>
-{extra_pages}
-<button id="theme" title="Toggle theme" aria-label="Toggle theme">Dark</button></div>
-<main>
-<h1>{html_lib.escape(title)} flashback</h1>
-<p class="muted">Generated {datetime.now().strftime('%Y-%m-%d %H:%M')}
-{"(names anonymized)" if anonymized else ""}</p>
-<div class="cards">
-<div class="card"><b>{dates[0]}</b><span>start</span></div>
-<div class="card"><b>{dates[-1]}</b><span>end</span></div>
-{totals_cards}
-</div>
-{joined}
-</main>"""
-    doc = f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{html_lib.escape(title)} flashback</title>
-<style>
-:root{{--bg:#ffffff;--fg:#202124;--muted:#777;--card:#f7f8fa;--border:#e3e5e8;--accent:#5b8ff9}}
-[data-theme="dark"]{{--bg:#17191f;--fg:#e8e8e8;--muted:#9aa0a6;--card:#20242d;--border:#2a2f3a}}
-*{{box-sizing:border-box}}
-html{{scroll-behavior:smooth}}
-body{{font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;padding:0 0 60px;color:var(--fg);background:var(--bg);line-height:1.5}}
-.topbar{{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:8px 20px;background:var(--card);border-bottom:1px solid var(--border);flex-wrap:wrap}}
-.brand{{font-weight:700;font-size:15px}}
-nav{{display:flex;gap:4px;flex-wrap:wrap;flex:1}}
-nav a{{color:var(--muted);text-decoration:none;font-size:12px;padding:4px 8px;border-radius:6px}}
-nav a:hover{{background:var(--border);color:var(--fg)}}
-.pages{{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}}
-.years{{color:var(--muted);text-decoration:none;font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px}}
-#theme{{border:1px solid var(--border);background:var(--bg);color:var(--fg);border-radius:6px;padding:4px 10px;cursor:pointer}}
-main{{max-width:1040px;margin:0 auto;padding:0 20px}}
-h1{{font-size:26px;margin-bottom:4px}}
-h2{{font-size:20px;margin-top:36px;border-bottom:1px solid var(--border);padding-bottom:6px}}
-.muted{{color:var(--muted);font-size:13px}}
-.cards{{display:flex;flex-wrap:wrap;gap:12px;margin:20px 0}}
-.card{{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:110px}}
-.card b{{display:block;font-size:22px}} .card span{{color:var(--muted);font-size:12px}}
-table{{border-collapse:collapse;width:100%;margin:10px 0;font-size:14px}}
-th,td{{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border)}}
-th{{color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap}}
-th.sort-asc::after{{content:" \\25b2";font-size:9px}} th.sort-desc::after{{content:" \\25bc";font-size:9px}}
-.tfilter{{margin:8px 0 2px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);width:220px}}
-.charts{{display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:22px}}
-figure{{margin:0;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px}}
-figure img{{max-width:100%;border-radius:6px;display:block}}
-figcaption{{color:var(--muted);font-size:12px;margin-top:8px}}
-li{{margin:6px 0;font-size:14px}}
-@media(prefers-color-scheme:dark){{:root:not([data-theme]){{--bg:#17191f;--fg:#e8e8e8;--muted:#9aa0a6;--card:#20242d;--border:#2a2f3a}}}}
-</style></head><body>{body}
-<script>
-(function(){{var r=document.documentElement,b=document.getElementById('theme');
-function apply(t){{if(t==='dark'){{r.setAttribute('data-theme','dark');b.textContent='Light';}}else{{r.removeAttribute('data-theme');b.textContent='Dark';}}}}
-if(localStorage.getItem('cf-theme'))apply(localStorage.getItem('cf-theme'));
-b.addEventListener('click',function(){{var t=r.getAttribute('data-theme')==='dark'?'light':'dark';apply(t);localStorage.setItem('cf-theme',t);}});
-document.querySelectorAll('table').forEach(function(t){{var tb=t.tBodies[0];
-var box=document.createElement('input');box.placeholder='Filter rows';box.className='tfilter';
-t.parentNode.insertBefore(box,t);
-box.addEventListener('input',function(){{var q=box.value.toLowerCase();
-Array.prototype.forEach.call(tb.rows,function(tr){{tr.style.display=tr.innerText.toLowerCase().indexOf(q)>=0?'':'none';}});}});
-var ths=t.querySelectorAll('th');
-ths.forEach(function(th,i){{th.addEventListener('click',function(){{var rows=Array.prototype.slice.call(tb.rows);
-var num=rows.every(function(tr){{return tr.cells[i]&&!isNaN(parseFloat(tr.cells[i].textContent.replace(/[^0-9.-]/g,'')))&&tr.cells[i].textContent.trim()!=='';}});
-var dir=th.getAttribute('data-dir')==='asc'?-1:1;th.setAttribute('data-dir',dir===1?'asc':'desc');
-ths.forEach(function(x){{x.classList.remove('sort-asc','sort-desc');}});th.classList.add(dir===1?'sort-asc':'sort-desc');
-rows.sort(function(a,b){{var av=a.cells[i].textContent.trim(),bv=b.cells[i].textContent.trim();
-return num?(parseFloat(av)-parseFloat(bv))*dir:av.localeCompare(bv)*dir;}});
-rows.forEach(function(tr){{tb.appendChild(tr);}});}});}});}});
-}})();
-</script></body></html>"""
+    written = _written_pages(analyses)
+    # The span moved into the lede, so it no longer occupies two of the cards
+    # and leaves the grid ragged.
+    body = f"""<h1>{html_lib.escape(title)} flashback</h1>
+<p class="lede">{dates[0]} to {dates[-1]} &middot;
+generated {datetime.now().strftime('%Y-%m-%d %H:%M')}
+{"&middot; names anonymized" if anonymized else ""}</p>
+<div class="cards">{totals_cards}</div>
+{joined}"""
+    doc = chatpage.document(
+        doc_title=f"{title} flashback", brand=f"{title} flashback",
+        written=written, current="report.html", main=body,
+        sections=_sections_of(joined))
     (out_dir / "report.html").write_text(doc, encoding="utf-8")
 
 
@@ -4022,8 +4031,7 @@ def serve(thread_dirs, args):
         return 1
     print(f"\nStarting local chat reader on http://127.0.0.1:{args.port} "
           f"(localhost only)")
-    run_server(threads, args.port, args.output, build_index=not args.no_index)
-    return 0
+    return run_server(threads, args.port, args.output, build_index=not args.no_index)
 
 
 def _message_has_content(m):
