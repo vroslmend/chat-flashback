@@ -341,14 +341,14 @@ def test_inside_jokes_ignores_member_names():
     msgs = []
     n = 0
     for year in (2020, 2021):
-        for sender in ("Ammar Hassan", "Syed Jafri"):
+        for sender in ("Bob Turner", "Jack Reed"):
             for _ in range(4):
                 dt = BASE.replace(year=year) + timedelta(days=n)
-                msgs.append(mk(sender, dt, "ammar hassan said the thing"))
+                msgs.append(mk(sender, dt, "bob turner said the thing"))
                 n += 1
     ac.add_derived_fields(msgs)
     phrases = {j["phrase"] for j in ac.inside_jokes(msgs)["jokes"]}
-    assert not any("ammar" in p or "hassan" in p for p in phrases), phrases
+    assert not any("bob" in p or "turner" in p for p in phrases), phrases
 
 
 def test_inside_jokes_collapses_fragments_of_a_longer_phrase():

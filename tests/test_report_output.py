@@ -170,21 +170,21 @@ def test_a_listed_participant_who_never_posted_is_not_a_topic(tmp_path):
     """Someone can be in the chat and send nothing -- a deleted account still
     gets talked about by name."""
     msgs = [raw("Alice" if i % 2 else "Bob", BASE + timedelta(minutes=i),
-                "ahsan cricket") for i in range(12)]
+                "ivy cricket") for i in range(12)]
     topics = topics_of(generate(tmp_path, msgs,
-                                participants=["Alice", "Bob", "Ahsan Raza"]))
+                                participants=["Alice", "Bob", "Ivy Nolan"]))
     assert "cricket" in topics
-    assert "ahsan" not in topics
+    assert "ivy" not in topics
 
 
 def test_names_flag_covers_people_the_export_never_lists(tmp_path):
     """The wiped account shows up as "Facebook user", so its real name is
     nowhere in the export and has to be supplied."""
     msgs = [raw("Alice" if i % 2 else "Bob", BASE + timedelta(minutes=i),
-                "ahsan cricket") for i in range(12)]
-    topics = topics_of(generate(tmp_path, msgs, "--names", "Ahsan, Shahood"))
+                "ivy cricket") for i in range(12)]
+    topics = topics_of(generate(tmp_path, msgs, "--names", "Ivy, Marco"))
     assert "cricket" in topics
-    assert "ahsan" not in topics
+    assert "ivy" not in topics
 
 
 # --------------------------------------------------------------------------- #

@@ -68,7 +68,7 @@ def test_topic_words_are_not_decided_by_one_pasted_message():
 
 
 def test_signature_word_is_not_decided_by_one_pasted_message():
-    msgs = [mk("A", BASE, "everyonedicks " * 40)]
+    msgs = [mk("A", BASE, "weekendplans " * 40)]
     msgs += [mk("A", BASE + timedelta(minutes=i), "kasmein") for i in range(1, 11)]
     msgs += [mk("B", BASE + timedelta(hours=i), "hello there") for i in range(1, 4)]
     ac.add_derived_fields(msgs)
@@ -81,19 +81,19 @@ def test_signature_word_is_not_decided_by_one_pasted_message():
 
 def test_group_and_nickname_events_are_not_vocabulary():
     for text in [
-        "Ammar Hassan named the group everyonedicks.",
-        "Ali Arfa set the nickname for Usman Tahir to British.",
-        "Ali Arfa set your nickname to the nalaik.",
-        "A contact cleared the nickname for Ali Arfa.",
-        "Rafay Ali Awan changed the group photo.",
-        "Hashim Cheema changed the theme to Love.",
-        "Hashim Cheema removed Rafay Ali Awan from the group.",
-        "Rafay Ali Awan left the group.",
-        "Ammar Hassan added Jawad Shahid to the group.",
+        "Bob Turner named the group weekendplans.",
+        "Carol Diaz set the nickname for Dave Miller to Skipper.",
+        "Carol Diaz set your nickname to the rookie.",
+        "A contact cleared the nickname for Carol Diaz.",
+        "Erin Walsh changed the group photo.",
+        "Frank Lopez changed the theme to Love.",
+        "Frank Lopez removed Erin Walsh from the group.",
+        "Erin Walsh left the group.",
+        "Bob Turner added Grace Kim to the group.",
         "You set the quick reaction to \U0001f602.",
-        "Ammar Hassan created a poll: Movie.",
+        "Bob Turner created a poll: Movie.",
         "This poll is no longer available.",
-        'Ali Arfa voted for "Option 1" in the poll.',
+        'Carol Diaz voted for "Option 1" in the poll.',
         "You pinned a message.",
         "A Messenger user started a call.",
         "A contact joined the video call.",
@@ -129,8 +129,8 @@ def test_event_messages_do_not_become_running_jokes():
 def test_name_filter_covers_people_who_never_sent_a_message():
     """A member whose account was deleted sends nothing, but is still a name."""
     msgs = [mk("Alice Smith", BASE, "hi")]
-    assert ac._member_name_words(msgs, ["Ahsan Raza"]) == {
-        "alice", "smith", "ahsan", "raza"}
+    assert ac._member_name_words(msgs, ["Ivy Nolan"]) == {
+        "alice", "smith", "ivy", "nolan"}
 
 
 def test_inside_jokes_record_what_each_year_did():
@@ -179,28 +179,28 @@ def test_plain_emoji_still_split_individually():
 def test_meta_ai_is_recognised_as_a_bot():
     assert ac.is_bot("Meta AI")
     assert ac.is_bot("meta ai")
-    assert not ac.is_bot("Ammar Hassan")
-    assert not ac.is_bot("Meta Ahmed")
+    assert not ac.is_bot("Bob Turner")
+    assert not ac.is_bot("Meta Brown")
 
 
 def test_fastest_replier_headline_skips_bots():
     speed = {"table": [
         {"member": "Meta AI", "median_s": 1, "median_m": 0.0},
-        {"member": "Ammar Hassan", "median_s": 6, "median_m": 0.1},
+        {"member": "Bob Turner", "median_s": 6, "median_m": 0.1},
     ]}
-    assert ac._fastest_replier(speed)["member"] == "Ammar Hassan"
+    assert ac._fastest_replier(speed)["member"] == "Bob Turner"
 
 
 def test_weirdest_statements_leave_bots_out():
     msgs = [mk("Meta AI", BASE, "OH YOU WANT A PICTURE?! " * 20),
-            mk("Ammar Hassan", BASE, "HALT HALT HALT HALT HALT HALT HALT!!!" * 8)]
+            mk("Bob Turner", BASE, "HALT HALT HALT HALT HALT HALT HALT!!!" * 8)]
     weird = ac.weird_statements(msgs)
-    assert [w["member"] for w in weird] == ["Ammar Hassan"]
+    assert [w["member"] for w in weird] == ["Bob Turner"]
 
 
 def test_bot_members_are_labelled_in_tables():
     assert ac.member_label("Meta AI") == "Meta AI (bot)"
-    assert ac.member_label("Ammar Hassan") == "Ammar Hassan"
+    assert ac.member_label("Bob Turner") == "Bob Turner"
 
 
 # --------------------------------------------------------------------------- #
